@@ -193,16 +193,6 @@ YOTO_REDIRECT_URI=https://yoto.example.com
 
 Then add `https://yoto.example.com/yoto/callback` to the **Allowed Callback URLs** in the Yoto Developer portal.
 
-**Troubleshooting: "Callback URL mismatch"**
-
-If you see _"The provided redirect_uri is not in the list of allowed callback URLs"_ after clicking "Connect to Yoto":
-
-1. Verify the callback URL in your Yoto Developer portal **exactly** matches what the app sends (no trailing slash, correct port)
-2. If behind a reverse proxy, make sure `YOTO_REDIRECT_URI` is set to the public URL
-3. If accessing via `127.0.0.1` instead of `localhost`, add `http://127.0.0.1:5000/yoto/callback` as well
-4. If running on a non-default port, update the URL to match (e.g. `http://localhost:8080/yoto/callback`)
-5. Changes in the Yoto Developer portal may take a few minutes to propagate
-
 Tokens are saved to `~/.yoto-scraper-tokens.json` and reused across sessions.
 
 ## Song File Format
