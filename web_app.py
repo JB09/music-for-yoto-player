@@ -315,7 +315,7 @@ def download_start():
 def download_results():
     results = session.get("download_results", [])
     confirmed = session.get("confirmed_songs", [])
-    yoto_available = bool(os.environ.get("YOTO_DEVELOPER_API"))
+    yoto_available = bool(os.environ.get("YOTO_CLIENT_ID"))
     return render_template(
         "results.html",
         results=results,
@@ -332,9 +332,9 @@ def download_results():
 def yoto_upload():
     from yoto_client import YotoClient
 
-    client_id = os.environ.get("YOTO_DEVELOPER_API", "")
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
     if not client_id:
-        return jsonify({"error": "YOTO_DEVELOPER_API not configured"}), 400
+        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
 
     card_name = request.form.get("card_name", "My Playlist")
     results = session.get("download_results", [])
