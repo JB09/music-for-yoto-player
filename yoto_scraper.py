@@ -2,20 +2,23 @@
 Yoto Music Scraper - Download audio from YouTube and upload to Yoto MYO cards.
 
 Usage:
-    python yoto_scraper.py                        # Uses songs.txt, downloads only
-    python yoto_scraper.py --yoto CLIENT_ID       # Download + upload to Yoto
-    python yoto_scraper.py my_songs.txt -o Music  # Custom song file and output dir
-    python yoto_scraper.py --card-name "Road Trip" --yoto CLIENT_ID
+    python yoto_scraper.py --chat                     # Build playlist via AI chat
+    python yoto_scraper.py                            # Uses songs.txt
+    python yoto_scraper.py --chat --yoto CLIENT_ID    # Chat + upload to Yoto
+    python yoto_scraper.py songs.txt --no-shuffle     # File input, keep order
 """
 
 import argparse
 import glob
 import os
+import random
 import sys
 from pathlib import Path
 
 import yt_dlp
 from ytmusicapi import YTMusic
+
+MAX_SONGS = 12
 
 
 def load_songs(filepath: str) -> list[str]:
@@ -36,6 +39,25 @@ def load_songs(filepath: str) -> list[str]:
         sys.exit(1)
 
     return songs
+
+
+def apply_limits(songs: list[str], shuffle: bool, max_songs: int) -> list[str]:
+    """Shuffle and cap the song list."""
+    if shuffle:
+        random.shuffle(songs)
+    if len(songs) > max_songs:
+        print(f"  Trimming to {max_songs} songs (from {len(songs)}).")
+        songs = songs[:max_songs]
+    return songs
+
+
+def display_final_list(songs: list[str]):
+    """Show the final song list before proceeding."""
+    print(f"\n  Final playlist ({len(songs)} songs):")
+    print(f"  {'─'*50}")
+    for i, s in enumerate(songs, 1):
+        print(f"  {i:2d}. {s}")
+    print()
 
 
 def search_youtube(ytmusic: YTMusic, query: str, num_results: int = 5) -> list[dict]:
@@ -185,17 +207,40 @@ def main():
     parser = argparse.ArgumentParser(
         description="Download audio from YouTube and optionally upload to Yoto MYO cards."
     )
-    parser.add_argument(
+
+    # Input source (mutually exclusive)
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument(
+        "--chat",
+        action="store_true",
+        help="Build playlist interactively via AI chat (requires ANTHROPIC_API_KEY)",
+    )
+    input_group.add_argument(
         "songfile",
         nargs="?",
-        default="songs.txt",
+        default=None,
         help="Path to text file with song names (default: songs.txt)",
     )
+
+    # Output and limits
     parser.add_argument(
         "-o", "--output",
         default="downloads",
         help="Output directory for downloaded files (default: downloads/)",
     )
+    parser.add_argument(
+        "--max-songs",
+        type=int,
+        default=MAX_SONGS,
+        help=f"Maximum number of songs to process (default: {MAX_SONGS})",
+    )
+    parser.add_argument(
+        "--no-shuffle",
+        action="store_true",
+        help="Keep songs in original order (default: randomize)",
+    )
+
+    # Yoto integration
     parser.add_argument(
         "--yoto",
         metavar="CLIENT_ID",
@@ -208,9 +253,27 @@ def main():
     )
     args = parser.parse_args()
 
-    # Load songs
-    songs = load_songs(args.songfile)
-    print(f"Loaded {len(songs)} song(s) from '{args.songfile}'")
+    # ── Get song list ──────────────────────────────────────────────
+    if args.chat:
+        from playlist_chat import chat_playlist
+        songs = chat_playlist()
+        if not songs:
+            print("\nNo songs selected. Exiting.")
+            sys.exit(0)
+    else:
+        songfile = args.songfile or "songs.txt"
+        songs = load_songs(songfile)
+        print(f"Loaded {len(songs)} song(s) from '{songfile}'")
+
+    # ── Shuffle and cap ────────────────────────────────────────────
+    shuffle = not args.no_shuffle
+    songs = apply_limits(songs, shuffle=shuffle, max_songs=args.max_songs)
+    display_final_list(songs)
+
+    proceed = input("  Proceed with these songs? [Y/n]: ").strip().lower()
+    if proceed and proceed != "y":
+        print("  Cancelled.")
+        sys.exit(0)
 
     # Create output directory
     output_dir = args.output
@@ -219,8 +282,8 @@ def main():
     # Initialize YouTube Music search
     ytmusic = YTMusic()
 
-    # Phase 1: Search and confirm all songs
-    print("\n--- PHASE 1: Search & Confirm Songs ---")
+    # ── Phase 1: Search and confirm all songs ──────────────────────
+    print("\n--- PHASE 1: Search & Confirm Songs on YouTube ---")
     confirmed = []
     for song_query in songs:
         query = song_query
@@ -240,7 +303,7 @@ def main():
         print("\nNo songs confirmed for download. Exiting.")
         sys.exit(0)
 
-    # Phase 2: Download confirmed songs
+    # ── Phase 2: Download confirmed songs ──────────────────────────
     print(f"\n--- PHASE 2: Downloading {len(confirmed)} song(s) ---")
     downloaded = []
     for i, song in enumerate(confirmed, 1):
@@ -260,7 +323,7 @@ def main():
     print(f"  {len(downloaded)}/{len(confirmed)} songs downloaded to '{output_dir}/'")
     print(f"{'='*60}")
 
-    # Phase 3: Upload to Yoto (if enabled)
+    # ── Phase 3: Upload to Yoto (if enabled) ───────────────────────
     if args.yoto and downloaded:
         print(f"\n--- PHASE 3: Upload to Yoto ---")
         card_name = args.card_name
