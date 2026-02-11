@@ -49,7 +49,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `YOTO_CLIENT_ID` | For Yoto upload | Yoto Developer API client ID |
-| `FLASK_SECRET_KEY` | No | Auto-generated if not set |
+| `FLASK_SECRET_KEY` | No | Auto-generated if not set. To set manually: `python3 -c "import secrets; print(secrets.token_hex(32))"` and add the output to your `.env` file. A fixed key ensures sessions survive container restarts. |
 
 ---
 
