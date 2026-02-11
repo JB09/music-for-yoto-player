@@ -1,4 +1,4 @@
-# Yoto Music Scraper
+# Music Scraper for Yoto
 
 Download audio (MP3) from YouTube and optionally upload directly to a Yoto Player MYO card.
 
@@ -44,7 +44,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
-| `YOTO_CLIENT_ID` | For Yoto upload | Yoto Developer API client ID |
+| `YOTO_DEVELOPER_API` | For Yoto upload | Yoto Developer API client ID |
 | `FLASK_SECRET_KEY` | No | Auto-generated if not set |
 
 ---
@@ -155,7 +155,7 @@ By default, the song list is **randomized** and **capped at 12 songs**. This is 
 
 1. Go to [yoto.dev/get-started](https://yoto.dev/get-started/start-here/) and register for a developer account
 2. Obtain your **Client ID** from the Yoto Developers portal
-3. Pass it via `--yoto` flag (CLI) or `YOTO_CLIENT_ID` env var (Docker/Web)
+3. Pass it via `--yoto` flag (CLI) or `YOTO_DEVELOPER_API` env var (Docker/Web)
 
 The CLI uses the [OAuth2 Device Code flow](https://yoto.dev/authentication/auth/) — on first run it opens a browser for login. Tokens are saved to `~/.yoto-scraper-tokens.json` for reuse.
 

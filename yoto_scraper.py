@@ -1,5 +1,5 @@
 """
-Yoto Music Scraper - Download audio from YouTube and upload to Yoto MYO cards.
+Music Scraper for Yoto - Download audio from YouTube and upload to Yoto MYO cards.
 
 Usage:
     python yoto_scraper.py --chat                     # Build playlist via AI chat
