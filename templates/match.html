@@ -108,11 +108,38 @@ document.querySelectorAll('.preview-btn').forEach(function(btn) {
 
         // Toggle this preview
         if (player.style.display === 'none') {
-            player.innerHTML = '<iframe width="100%" height="80" style="border:none;" src="https://www.youtube-nocookie.com/embed/' + videoId + '?autoplay=1&origin=' + encodeURIComponent(window.location.origin) + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+            var iframe = document.createElement('iframe');
+            iframe.width = '100%';
+            iframe.height = '80';
+            iframe.style.border = 'none';
+            iframe.allow = 'autoplay; encrypted-media';
+            iframe.allowFullscreen = true;
+            iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?autoplay=1&origin=' + encodeURIComponent(window.location.origin);
+            player.innerHTML = '';
+            player.appendChild(iframe);
             player.style.display = 'block';
             btn.innerHTML = stopSvg;
             btn.title = 'Close preview';
             btn.style.background = '#dc2626';
+
+            // Detect embed failure and show YouTube link fallback
+            iframe.addEventListener('load', function() {
+                try {
+                    // Can't access cross-origin content, but we can detect errors via timeout
+                } catch(e) {}
+            });
+            iframe.addEventListener('error', function() {
+                showYouTubeFallback(player, videoId, btn);
+            });
+            // Fallback: if iframe loads but video shows error, provide a link after a short delay
+            setTimeout(function() {
+                if (player.style.display !== 'none' && player.querySelector('iframe')) {
+                    var fallback = document.createElement('div');
+                    fallback.style.cssText = 'text-align:center; padding:4px 0; font-size:12px;';
+                    fallback.innerHTML = 'Not playing? <a href="https://www.youtube.com/watch?v=' + videoId + '" target="_blank" rel="noopener" style="color:#3b82f6; text-decoration:underline;">Open on YouTube</a>';
+                    player.appendChild(fallback);
+                }
+            }, 2000);
         } else {
             closePreview(btn, player);
         }
