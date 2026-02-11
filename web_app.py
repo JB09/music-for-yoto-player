@@ -14,6 +14,8 @@ import random
 import secrets
 import hashlib
 import glob
+import threading
+import uuid
 from pathlib import Path
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
@@ -28,6 +30,13 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
 ytmusic = YTMusic()
+
+# In-memory store for background upload jobs keyed by job_id.
+# Each entry: {"status": "running"|"done"|"error", "current": int,
+#              "total": int, "current_title": str, "tracks": [], "errors": [],
+#              "result": dict|None}
+_upload_jobs: dict[str, dict] = {}
+_upload_jobs_lock = threading.Lock()
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -398,34 +407,22 @@ def yoto_callback():
     return redirect(url_for("download_results"))
 
 
-# ── Yoto Upload ─────────────────────────────────────────────────────
+# ── Yoto Upload (background worker) ────────────────────────────────
 
 
-@app.route("/yoto/upload", methods=["POST"])
-def yoto_upload():
+def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
+                    icon_mode: str, client_id: str):
+    """Background thread that uploads tracks to Yoto and creates a card."""
     from yoto_client import YotoClient
 
-    client_id = os.environ.get("YOTO_CLIENT_ID", "")
-    if not client_id:
-        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
-
-    card_name = request.form.get("card_name", "My Playlist")
-    results = session.get("download_results", [])
-    successful = [r for r in results if r["success"]]
-
-    if not successful:
-        return jsonify({"error": "No downloaded files to upload"}), 400
-
+    job = _upload_jobs[job_id]
     client = YotoClient(client_id)
-    if not client.is_authenticated():
-        return jsonify({
-            "error": "Not authenticated with Yoto. Please connect your Yoto account first.",
-            "needs_auth": True,
-        }), 401
 
     tracks = []
     errors = []
-    for song in successful:
+    for i, song in enumerate(successful):
+        job["current"] = i + 1
+        job["current_title"] = song["title"]
         try:
             data = client.upload_and_transcode(song["filepath"])
             tracks.append({
@@ -439,33 +436,110 @@ def yoto_upload():
         except Exception as e:
             errors.append(f"{song['title']}: {e}")
 
+    job["errors"] = errors
+
     if not tracks:
-        return jsonify({"error": "All uploads failed", "details": errors}), 500
+        job["status"] = "error"
+        job["result"] = {"error": "All uploads failed", "details": errors}
+        return
+
+    job["current_title"] = "Selecting card icon..."
 
     # Select an icon for the card via AI
     icon_media_id = None
     try:
         from icon_selector import select_icon_for_card
         song_titles = [t["title"] for t in tracks]
-        prefer_generate = request.form.get("icon_mode") == "generate"
+        prefer_generate = icon_mode == "generate"
         icon_media_id = select_icon_for_card(
             client, song_titles, card_name, prefer_generate=prefer_generate,
         )
     except Exception as e:
         errors.append(f"Icon selection failed: {e}")
 
+    job["current_title"] = "Creating MYO card..."
+
     try:
         card = client.create_myo_card(card_name, tracks, icon_media_id=icon_media_id)
         card_id = card.get("cardId", card.get("_id", "unknown"))
-        return jsonify({
+        job["status"] = "done"
+        job["result"] = {
             "success": True,
             "cardId": card_id,
             "tracksUploaded": len(tracks),
             "iconSet": icon_media_id is not None,
             "errors": errors,
-        })
+        }
     except Exception as e:
-        return jsonify({"error": f"Card creation failed: {e}"}), 500
+        job["status"] = "error"
+        job["result"] = {"error": f"Card creation failed: {e}"}
+
+
+@app.route("/yoto/upload", methods=["POST"])
+def yoto_upload():
+    from yoto_client import YotoClient
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    if not client_id:
+        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
+
+    card_name = request.form.get("card_name", "My Playlist")
+    icon_mode = request.form.get("icon_mode", "public")
+    results = session.get("download_results", [])
+    successful = [r for r in results if r["success"]]
+
+    if not successful:
+        return jsonify({"error": "No downloaded files to upload"}), 400
+
+    client = YotoClient(client_id)
+    if not client.is_authenticated():
+        return jsonify({
+            "error": "Not authenticated with Yoto. Please connect your Yoto account first.",
+            "needs_auth": True,
+        }), 401
+
+    # Create a background job
+    job_id = uuid.uuid4().hex[:12]
+    _upload_jobs[job_id] = {
+        "status": "running",
+        "current": 0,
+        "total": len(successful),
+        "current_title": "",
+        "tracks": [],
+        "errors": [],
+        "result": None,
+    }
+
+    thread = threading.Thread(
+        target=_run_upload_job,
+        args=(job_id, successful, card_name, icon_mode, client_id),
+        daemon=True,
+    )
+    thread.start()
+
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/yoto/upload/status")
+def yoto_upload_status():
+    job_id = request.args.get("job_id", "")
+    job = _upload_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown job ID"}), 404
+
+    resp = {
+        "status": job["status"],
+        "current": job["current"],
+        "total": job["total"],
+        "current_title": job["current_title"],
+    }
+
+    if job["status"] in ("done", "error"):
+        resp["result"] = job["result"]
+        # Clean up finished job
+        _upload_jobs.pop(job_id, None)
+
+    return jsonify(resp)
 
 
 if __name__ == "__main__":
