@@ -49,7 +49,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `YOTO_CLIENT_ID` | For Yoto upload | Yoto Developer API client ID |
-| `YOTO_REDIRECT_URI` | No | Override the OAuth callback URL. Required when running behind a reverse proxy or custom domain (e.g. `https://yoto.buildmyegg.com/yoto/callback`). If not set, auto-detected from the request. |
+| `YOTO_REDIRECT_URI` | No | Public base URL when behind a reverse proxy or custom domain (e.g. `https://yoto.buildmyegg.com`). The `/yoto/callback` path is appended automatically. If not set, auto-detected from the request. |
 | `FLASK_SECRET_KEY` | No | Auto-generated if not set. To set manually: `python3 -c "import secrets; print(secrets.token_hex(32))"` and add the output to your `.env` file. A fixed key ensures sessions survive container restarts. |
 
 ---
@@ -185,13 +185,13 @@ For the Web UI's OAuth flow to work, you must add a **callback URL** in the Yoto
 
 **Using a reverse proxy or custom domain**
 
-If the app runs behind a reverse proxy (e.g. `https://yoto.buildmyegg.com`), the auto-detected callback URL will be wrong because the app sees `localhost` internally. Set the `YOTO_REDIRECT_URI` environment variable to the public callback URL:
+If the app runs behind a reverse proxy (e.g. `https://yoto.buildmyegg.com`), the auto-detected callback URL will be wrong because the app sees `localhost` internally. Set the `YOTO_REDIRECT_URI` environment variable to your public base URL — the `/yoto/callback` path is appended automatically:
 
 ```bash
-YOTO_REDIRECT_URI=https://yoto.buildmyegg.com/yoto/callback
+YOTO_REDIRECT_URI=https://yoto.buildmyegg.com
 ```
 
-Then add that same URL to the **Allowed Callback URLs** in the Yoto Developer portal.
+Then add `https://yoto.buildmyegg.com/yoto/callback` to the **Allowed Callback URLs** in the Yoto Developer portal.
 
 **Troubleshooting: "Callback URL mismatch"**
 
