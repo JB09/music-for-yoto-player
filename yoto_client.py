@@ -374,6 +374,68 @@ class YotoClient:
         resp.raise_for_status()
         return resp.json().get("displayIcon", resp.json())
 
+    def update_myo_card(self, card_id: str, title: str, tracks: list[dict],
+                        icon_media_id: str | None = None) -> dict:
+        """
+        Update an existing MYO card by posting with its cardId.
+
+        Uses the same POST /content endpoint but includes cardId to update.
+        """
+        icon_ref = f"yoto:#{icon_media_id}" if icon_media_id else None
+
+        chapters = []
+        for i, track in enumerate(tracks):
+            key = f"{i + 1:02d}"
+            chapter = {
+                "key": key,
+                "title": track["title"],
+                "overlayLabel": str(i + 1),
+                "tracks": [{
+                    "key": "01",
+                    "title": track["title"],
+                    "trackUrl": f"yoto:#{track['transcodedSha256']}",
+                    "duration": track.get("duration", 0),
+                    "fileSize": track.get("fileSize", 0),
+                    "channels": track.get("channels", "stereo"),
+                    "format": track.get("format", "aac"),
+                    "type": "audio",
+                    "overlayLabel": str(i + 1),
+                }],
+            }
+            if icon_ref:
+                chapter["display"] = {"icon16x16": icon_ref}
+            chapters.append(chapter)
+
+        total_duration = sum(t.get("duration", 0) for t in tracks)
+        total_size = sum(t.get("fileSize", 0) for t in tracks)
+
+        payload = {
+            "cardId": card_id,
+            "title": title,
+            "content": {
+                "chapters": chapters,
+                "config": {
+                    "resumeTimeout": 0,
+                    "playbackType": "default",
+                },
+            },
+            "metadata": {
+                "description": f"Created by Music Scraper for Yoto ({len(tracks)} tracks)",
+                "media": {
+                    "duration": total_duration,
+                    "fileSize": total_size,
+                },
+            },
+        }
+
+        resp = requests.post(
+            f"{API_BASE}/content",
+            json=payload,
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json().get("card", resp.json())
+
     # ── Utilities ───────────────────────────────────────────────────
 
     def list_myo_cards(self) -> list[dict]:
@@ -385,3 +447,12 @@ class YotoClient:
         )
         resp.raise_for_status()
         return resp.json().get("cards", [])
+
+    def get_card(self, card_id: str) -> dict:
+        """Get full card details including chapters."""
+        resp = requests.get(
+            f"{API_BASE}/content/{card_id}",
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json().get("card", resp.json())

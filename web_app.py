@@ -407,16 +407,96 @@ def yoto_callback():
     return redirect(url_for("download_results"))
 
 
+# ── Yoto Cards List ────────────────────────────────────────────────
+
+MAX_TRACKS_PER_CARD = 100
+
+
+@app.route("/yoto/cards")
+def yoto_cards():
+    """Return the user's existing MYO cards as JSON for the dropdown."""
+    from yoto_client import YotoClient
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    if not client_id:
+        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
+
+    client = YotoClient(client_id)
+    if not client.is_authenticated():
+        return jsonify({"error": "Not authenticated"}), 401
+
+    try:
+        cards = client.list_myo_cards()
+        result = []
+        for c in cards:
+            card_id = c.get("cardId", c.get("_id", ""))
+            title = c.get("title", "Untitled")
+            # Chapter count from the list endpoint (may be summary only)
+            chapters = c.get("content", {}).get("chapters", [])
+            result.append({
+                "cardId": card_id,
+                "title": title,
+                "trackCount": len(chapters),
+            })
+        return jsonify({"cards": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Yoto Upload (background worker) ────────────────────────────────
 
 
 def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
-                    icon_mode: str, client_id: str):
-    """Background thread that uploads tracks to Yoto and creates a card."""
+                    icon_mode: str, client_id: str,
+                    existing_card_id: str | None = None):
+    """Background thread that uploads tracks to Yoto and creates/updates a card."""
     from yoto_client import YotoClient
 
     job = _upload_jobs[job_id]
     client = YotoClient(client_id)
+
+    # If adding to an existing card, fetch it first to get existing tracks
+    existing_tracks = []
+    if existing_card_id:
+        try:
+            job["current_title"] = "Loading existing card..."
+            card_data = client.get_card(existing_card_id)
+            existing_chapters = card_data.get("content", {}).get("chapters", [])
+            for ch in existing_chapters:
+                ch_tracks = ch.get("tracks", [])
+                if ch_tracks:
+                    t = ch_tracks[0]
+                    track_url = t.get("trackUrl", "")
+                    sha = track_url.replace("yoto:#", "") if track_url.startswith("yoto:#") else ""
+                    existing_tracks.append({
+                        "title": ch.get("title", t.get("title", "")),
+                        "transcodedSha256": sha,
+                        "duration": t.get("duration", 0),
+                        "fileSize": t.get("fileSize", 0),
+                        "channels": t.get("channels", "stereo"),
+                        "format": t.get("format", "aac"),
+                    })
+            # Check capacity
+            available = MAX_TRACKS_PER_CARD - len(existing_tracks)
+            if available <= 0:
+                job["status"] = "error"
+                job["result"] = {
+                    "error": f"Card already has {len(existing_tracks)} tracks "
+                             f"(max {MAX_TRACKS_PER_CARD}). No room for new tracks.",
+                }
+                return
+            if len(successful) > available:
+                job["status"] = "error"
+                job["result"] = {
+                    "error": f"Card has {len(existing_tracks)} tracks with room for "
+                             f"{available} more, but you're trying to add "
+                             f"{len(successful)}. Please reduce your playlist.",
+                }
+                return
+        except Exception as e:
+            job["status"] = "error"
+            job["result"] = {"error": f"Failed to load existing card: {e}"}
+            return
 
     tracks = []
     errors = []
@@ -441,6 +521,28 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
     if not tracks:
         job["status"] = "error"
         job["result"] = {"error": "All uploads failed", "details": errors}
+        return
+
+    if existing_card_id:
+        # Merge existing + new tracks and update the card
+        all_tracks = existing_tracks + tracks
+        job["current_title"] = "Updating existing card..."
+        try:
+            card = client.update_myo_card(existing_card_id, card_name, all_tracks)
+            card_id = card.get("cardId", card.get("_id", "unknown"))
+            job["status"] = "done"
+            job["result"] = {
+                "success": True,
+                "cardId": card_id,
+                "tracksUploaded": len(tracks),
+                "totalTracks": len(all_tracks),
+                "iconSet": False,
+                "errors": errors,
+                "updated": True,
+            }
+        except Exception as e:
+            job["status"] = "error"
+            job["result"] = {"error": f"Card update failed: {e}"}
         return
 
     job["current_title"] = "Selecting card icon..."
@@ -485,6 +587,7 @@ def yoto_upload():
 
     card_name = request.form.get("card_name", "My Playlist")
     icon_mode = request.form.get("icon_mode", "public")
+    existing_card_id = request.form.get("existing_card_id", "").strip() or None
     results = session.get("download_results", [])
     successful = [r for r in results if r["success"]]
 
@@ -512,7 +615,8 @@ def yoto_upload():
 
     thread = threading.Thread(
         target=_run_upload_job,
-        args=(job_id, successful, card_name, icon_mode, client_id),
+        args=(job_id, successful, card_name, icon_mode, client_id,
+              existing_card_id),
         daemon=True,
     )
     thread.start()
