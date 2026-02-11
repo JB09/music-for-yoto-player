@@ -1,0 +1,5 @@
+# Add one song per line
+# Example:
+# Bohemian Rhapsody - Queen
+# Hotel California - Eagles
+# Yesterday - The Beatles
