@@ -42,6 +42,82 @@ _upload_jobs_lock = threading.Lock()
 # ── Helpers ─────────────────────────────────────────────────────────
 
 
+# Words too common/short to be meaningful in filename matching
+_STOP_WORDS = {
+    "a", "an", "the", "of", "in", "on", "at", "to", "for", "and", "or", "is",
+    "it", "my", "me", "we", "us", "by", "so", "no", "do", "be", "am", "as",
+    "if", "up", "he", "she", "i", "oh", "ya", "yo", "ft", "feat", "vs",
+    "remix", "mix", "edit", "version", "ver", "pt", "vol",
+}
+
+
+def _significant_words(text: str) -> set[str]:
+    """Extract meaningful words (3+ chars, not stop words) from text."""
+    import re
+    words = set(re.findall(r"[a-z0-9]+", text.lower()))
+    return {w for w in words if len(w) >= 3 and w not in _STOP_WORDS}
+
+
+def _flag_downloaded_results(results: list[dict]):
+    """
+    Flag search results that match files already in OUTPUT_DIR.
+
+    Sets on each result dict:
+      - downloaded: True if an exact filename match exists
+      - partial_match: filename string if significant title/artist words
+                       match an existing file (but not exact)
+    """
+    try:
+        existing_files = os.listdir(OUTPUT_DIR)
+    except FileNotFoundError:
+        for r in results:
+            r["downloaded"] = False
+            r["partial_match"] = ""
+        return
+
+    mp3_files = [f for f in existing_files if f.lower().endswith(".mp3")]
+    # Pre-compute significant words for each existing file
+    file_words = {}
+    for f in mp3_files:
+        name_no_ext = os.path.splitext(f)[0]
+        file_words[f] = _significant_words(name_no_ext)
+
+    for r in results:
+        safe = f"{r['artist']} - {r['title']}".replace("/", "-").replace("\\", "-")
+        exact_name = f"{safe}.mp3"
+
+        # Check exact match
+        if exact_name in existing_files:
+            r["downloaded"] = True
+            r["partial_match"] = ""
+            continue
+
+        r["downloaded"] = False
+        r["partial_match"] = ""
+
+        # Check partial match: do significant words from the result overlap
+        # well with any existing filename?
+        result_words = _significant_words(f"{r['artist']} {r['title']}")
+        if len(result_words) < 2:
+            continue
+
+        best_match = ""
+        best_score = 0
+        for f, fw in file_words.items():
+            if not fw:
+                continue
+            overlap = result_words & fw
+            # Score: fraction of result words found in filename
+            score = len(overlap) / len(result_words)
+            if score > best_score and len(overlap) >= 2:
+                best_score = score
+                best_match = f
+
+        # Require at least 50% word overlap to flag as partial
+        if best_score >= 0.5 and best_match:
+            r["partial_match"] = best_match
+
+
 def search_youtube_music(query: str, num_results: int = 5) -> list[dict]:
     results = ytmusic.search(query, filter="songs", limit=num_results)
     parsed = []
@@ -60,6 +136,12 @@ def search_youtube_music(query: str, num_results: int = 5) -> list[dict]:
 def download_audio(video_id: str, title: str, artist: str) -> str | None:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     safe_filename = f"{artist} - {title}".replace("/", "-").replace("\\", "-")
+
+    # Skip download if the file already exists
+    mp3_path = os.path.join(OUTPUT_DIR, f"{safe_filename}.mp3")
+    if os.path.exists(mp3_path):
+        return mp3_path
+
     outtmpl = os.path.join(OUTPUT_DIR, f"{safe_filename}.%(ext)s")
     ydl_opts = {
         "format": "bestaudio/best",
@@ -282,13 +364,11 @@ def match_song():
     results = search_youtube_music(query)
 
     # Flag results that already have a downloaded file in OUTPUT_DIR
-    for r in results:
-        safe = f"{r['artist']} - {r['title']}".replace("/", "-").replace("\\", "-")
-        mp3_path = os.path.join(OUTPUT_DIR, f"{safe}.mp3")
-        r["downloaded"] = os.path.exists(mp3_path)
+    _flag_downloaded_results(results)
 
-    # Sort so downloaded files come first (stable sort preserves relevance order)
-    results.sort(key=lambda r: not r["downloaded"])
+    # Sort so downloaded/matched files come first (stable sort preserves relevance order)
+    # Exact matches first, then partial, then unmatched
+    results.sort(key=lambda r: (0 if r["downloaded"] else 1 if r.get("partial_match") else 2))
 
     return render_template(
         "match.html",
