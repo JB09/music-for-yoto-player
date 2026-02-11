@@ -1,8 +1,9 @@
 """
 Yoto API client for uploading audio and creating MYO cards.
 
-Handles OAuth2 device-code authentication, audio upload with transcoding,
-and MYO card/playlist creation via the official Yoto Developer API.
+Handles OAuth2 authentication (device-code flow for CLI, authorization-code
+flow for web), audio upload with transcoding, and MYO card/playlist creation
+via the official Yoto Developer API.
 
 API docs: https://yoto.dev/api/
 """
@@ -151,6 +152,47 @@ class YotoClient:
             return True
         print("\n  Yoto authentication required.")
         return self.authenticate()
+
+    # ── Authorization Code Flow (for web apps) ───────────────────────
+
+    def get_authorize_url(self, redirect_uri: str, state: str) -> str:
+        """
+        Build the authorization URL for the Authorization Code flow.
+
+        The user's browser should be redirected to this URL. After login,
+        Yoto redirects back to redirect_uri with ?code=...&state=...
+        """
+        from urllib.parse import urlencode
+        params = {
+            "response_type": "code",
+            "client_id": self.client_id,
+            "redirect_uri": redirect_uri,
+            "scope": SCOPES,
+            "audience": AUDIENCE,
+            "state": state,
+        }
+        return f"{AUTH_BASE}/authorize?{urlencode(params)}"
+
+    def exchange_code(self, code: str, redirect_uri: str) -> bool:
+        """
+        Exchange an authorization code for access + refresh tokens.
+
+        Called from the OAuth callback handler after the user authorizes.
+        Returns True on success.
+        """
+        resp = requests.post(f"{AUTH_BASE}/oauth/token", json={
+            "grant_type": "authorization_code",
+            "client_id": self.client_id,
+            "code": code,
+            "redirect_uri": redirect_uri,
+        })
+        resp.raise_for_status()
+        data = resp.json()
+        self.access_token = data["access_token"]
+        self.refresh_token = data.get("refresh_token")
+        self.expires_at = time.time() + data.get("expires_in", 86400)
+        self._save_tokens()
+        return True
 
     # ── Upload ──────────────────────────────────────────────────────
 

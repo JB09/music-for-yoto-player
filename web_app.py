@@ -313,16 +313,86 @@ def download_start():
 
 @app.route("/download/results")
 def download_results():
+    from yoto_client import YotoClient
+
     results = session.get("download_results", [])
     confirmed = session.get("confirmed_songs", [])
-    yoto_available = bool(os.environ.get("YOTO_CLIENT_ID"))
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    yoto_available = bool(client_id)
+
+    yoto_authenticated = False
+    if yoto_available:
+        client = YotoClient(client_id)
+        yoto_authenticated = client.is_authenticated()
+
     return render_template(
         "results.html",
         results=results,
         total=len(confirmed),
         success_count=sum(1 for r in results if r["success"]),
         yoto_available=yoto_available,
+        yoto_authenticated=yoto_authenticated,
     )
+
+
+# ── Yoto Authentication (Authorization Code flow) ──────────────────
+
+
+def _yoto_redirect_uri():
+    """Build the OAuth callback URL based on the current request."""
+    return request.host_url.rstrip("/") + "/yoto/callback"
+
+
+@app.route("/yoto/auth")
+def yoto_auth():
+    """Start the Yoto OAuth Authorization Code flow."""
+    from yoto_client import YotoClient
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    if not client_id:
+        return "YOTO_CLIENT_ID not configured", 400
+
+    state = secrets.token_urlsafe(32)
+    session["yoto_oauth_state"] = state
+
+    client = YotoClient(client_id)
+    authorize_url = client.get_authorize_url(_yoto_redirect_uri(), state)
+    return redirect(authorize_url)
+
+
+@app.route("/yoto/callback")
+def yoto_callback():
+    """Handle the OAuth callback from Yoto after user authorizes."""
+    from yoto_client import YotoClient
+
+    error = request.args.get("error")
+    if error:
+        error_desc = request.args.get("error_description", error)
+        return render_template("results.html",
+                               results=session.get("download_results", []),
+                               total=len(session.get("confirmed_songs", [])),
+                               success_count=sum(1 for r in session.get("download_results", []) if r["success"]),
+                               yoto_available=True,
+                               yoto_authenticated=False,
+                               yoto_auth_error=f"Authorization failed: {error_desc}")
+
+    code = request.args.get("code", "")
+    state = request.args.get("state", "")
+
+    # Verify state to prevent CSRF
+    if state != session.pop("yoto_oauth_state", None):
+        return "Invalid OAuth state — possible CSRF attack.", 403
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    client = YotoClient(client_id)
+
+    try:
+        client.exchange_code(code, _yoto_redirect_uri())
+    except Exception as e:
+        return f"Token exchange failed: {e}", 500
+
+    # Redirect back to the results page (now authenticated)
+    return redirect(url_for("download_results"))
 
 
 # ── Yoto Upload ─────────────────────────────────────────────────────
@@ -346,8 +416,8 @@ def yoto_upload():
     client = YotoClient(client_id)
     if not client.is_authenticated():
         return jsonify({
-            "error": "Not authenticated with Yoto. Run the CLI first to authenticate: "
-                     "python yoto_scraper.py --yoto " + client_id
+            "error": "Not authenticated with Yoto. Please connect your Yoto account first.",
+            "needs_auth": True,
         }), 401
 
     tracks = []

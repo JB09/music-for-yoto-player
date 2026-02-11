@@ -47,6 +47,11 @@
         Create a MYO card playlist with your downloaded songs.
     </p>
 
+    {% if yoto_auth_error %}
+    <p class="text-danger" style="margin-bottom: 1rem;">{{ yoto_auth_error }}</p>
+    {% endif %}
+
+    {% if yoto_authenticated %}
     <div id="yotoForm">
         <input type="text" id="cardName" placeholder="Playlist name (e.g. Bedtime Songs)"
                style="margin-bottom: 0.75rem;">
@@ -64,6 +69,16 @@
             Upload to Yoto &amp; Create MYO Card
         </button>
     </div>
+    {% else %}
+    <div id="yotoConnect">
+        <p class="text-muted text-sm" style="margin-bottom: 0.75rem;">
+            Connect your Yoto account to upload songs and create a MYO card.
+        </p>
+        <a href="/yoto/auth" class="btn btn-primary btn-block">
+            Connect to Yoto
+        </a>
+    </div>
+    {% endif %}
 
     <div id="yotoProgress" style="display: none;" class="text-center">
         <div class="spinner"></div>
@@ -80,7 +95,7 @@
 {% endblock %}
 
 {% block scripts %}
-{% if yoto_available and success_count > 0 %}
+{% if yoto_available and success_count > 0 and yoto_authenticated %}
 <script>
 function uploadToYoto() {
     const name = document.getElementById('cardName').value.trim() || 'My Playlist';

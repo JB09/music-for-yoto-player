@@ -161,7 +161,28 @@ By default, the song list is **randomized** and **capped at 12 songs**. This is 
 2. Obtain your **Client ID** from the Yoto Developers portal
 3. Pass it via `--yoto` flag (CLI) or `YOTO_CLIENT_ID` env var (Docker/Web)
 
-The CLI uses the [OAuth2 Device Code flow](https://yoto.dev/authentication/auth/) — on first run it opens a browser for login. Tokens are saved to `~/.yoto-scraper-tokens.json` for reuse.
+### Authentication
+
+Two OAuth2 flows are supported:
+
+- **CLI** — Uses the [Device Code flow](https://yoto.dev/authentication/auth/). On first run it opens a browser for login. No callback URL needed.
+- **Web UI** — Uses the [Authorization Code flow](https://yoto.dev/authentication/auth/). Click "Connect to Yoto" in the browser to log in. After authorization, Yoto redirects back to the app automatically.
+
+### Callback URL Configuration (Web UI)
+
+For the Web UI's OAuth flow to work, you must add a **callback URL** in the Yoto Developer portal:
+
+1. Go to your app settings at [yoto.dev](https://yoto.dev/)
+2. Find **Allowed Callback URLs**
+3. Add your app's callback URL:
+   - Local development: `http://localhost:5000/yoto/callback`
+   - Docker: `http://localhost:5000/yoto/callback`
+   - Production: `https://yourdomain.com/yoto/callback`
+4. Multiple URLs can be comma-separated (e.g. for different environments)
+
+> **Note:** All callback URLs must use `https://` in production. `http://` is only accepted for `localhost`.
+
+Tokens are saved to `~/.yoto-scraper-tokens.json` and reused across sessions.
 
 ## Song File Format
 
