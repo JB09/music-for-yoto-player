@@ -280,6 +280,16 @@ def match_song():
                 return redirect(url_for("match_song", q=new_query))
 
     results = search_youtube_music(query)
+
+    # Flag results that already have a downloaded file in OUTPUT_DIR
+    for r in results:
+        safe = f"{r['artist']} - {r['title']}".replace("/", "-").replace("\\", "-")
+        mp3_path = os.path.join(OUTPUT_DIR, f"{safe}.mp3")
+        r["downloaded"] = os.path.exists(mp3_path)
+
+    # Sort so downloaded files come first (stable sort preserves relevance order)
+    results.sort(key=lambda r: not r["downloaded"])
+
     return render_template(
         "match.html",
         query=query,
