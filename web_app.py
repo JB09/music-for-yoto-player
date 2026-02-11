@@ -340,6 +340,9 @@ def download_results():
 
 def _yoto_redirect_uri():
     """Build the OAuth callback URL based on the current request."""
+    override = os.environ.get("YOTO_REDIRECT_URI")
+    if override:
+        return override
     return request.host_url.rstrip("/") + "/yoto/callback"
 
 

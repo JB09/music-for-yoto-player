@@ -49,6 +49,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `YOTO_CLIENT_ID` | For Yoto upload | Yoto Developer API client ID |
+| `YOTO_REDIRECT_URI` | No | Override the OAuth callback URL. Required when running behind a reverse proxy or custom domain (e.g. `https://yoto.buildmyegg.com/yoto/callback`). If not set, auto-detected from the request. |
 | `FLASK_SECRET_KEY` | No | Auto-generated if not set. To set manually: `python3 -c "import secrets; print(secrets.token_hex(32))"` and add the output to your `.env` file. A fixed key ensures sessions survive container restarts. |
 
 ---
@@ -177,19 +178,30 @@ For the Web UI's OAuth flow to work, you must add a **callback URL** in the Yoto
 3. Add your app's callback URL:
    - Local development: `http://localhost:5000/yoto/callback`
    - Docker: `http://localhost:5000/yoto/callback`
-   - Production: `https://yourdomain.com/yoto/callback`
+   - Reverse proxy / custom domain: `https://yourdomain.com/yoto/callback`
 4. Multiple URLs can be comma-separated (e.g. for different environments)
 
 > **Note:** All callback URLs must use `https://` in production. `http://` is only accepted for `localhost`.
+
+**Using a reverse proxy or custom domain**
+
+If the app runs behind a reverse proxy (e.g. `https://yoto.buildmyegg.com`), the auto-detected callback URL will be wrong because the app sees `localhost` internally. Set the `YOTO_REDIRECT_URI` environment variable to the public callback URL:
+
+```bash
+YOTO_REDIRECT_URI=https://yoto.buildmyegg.com/yoto/callback
+```
+
+Then add that same URL to the **Allowed Callback URLs** in the Yoto Developer portal.
 
 **Troubleshooting: "Callback URL mismatch"**
 
 If you see _"The provided redirect_uri is not in the list of allowed callback URLs"_ after clicking "Connect to Yoto":
 
-1. Verify the callback URL in your Yoto Developer portal **exactly** matches `http://localhost:5000/yoto/callback` (no trailing slash, correct port)
-2. If accessing via `127.0.0.1` instead of `localhost`, add `http://127.0.0.1:5000/yoto/callback` as well
-3. If running on a non-default port, update the URL to match (e.g. `http://localhost:8080/yoto/callback`)
-4. Changes in the Yoto Developer portal may take a few minutes to propagate
+1. Verify the callback URL in your Yoto Developer portal **exactly** matches what the app sends (no trailing slash, correct port)
+2. If behind a reverse proxy, make sure `YOTO_REDIRECT_URI` is set to the public URL
+3. If accessing via `127.0.0.1` instead of `localhost`, add `http://127.0.0.1:5000/yoto/callback` as well
+4. If running on a non-default port, update the URL to match (e.g. `http://localhost:8080/yoto/callback`)
+5. Changes in the Yoto Developer portal may take a few minutes to propagate
 
 Tokens are saved to `~/.yoto-scraper-tokens.json` and reused across sessions.
 
