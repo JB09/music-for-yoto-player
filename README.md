@@ -20,11 +20,15 @@ Download audio (MP3) from YouTube and optionally upload directly to a Yoto Playe
 
 ## Quick Start (Docker)
 
-The fastest way to get running:
+The fastest way to get running.
+
+> **Note:** SSH key authentication must be set up with GitHub before cloning.
+> See [GitHub's SSH guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) if you haven't done this yet.
+> Use the SSH clone URL (starts with `git@github.com:`) rather than HTTPS.
 
 ```bash
-# 1. Clone the repo
-git clone <repo-url>
+# 1. Clone the repo (use SSH URL)
+git clone git@github.com:JB09/music-scraper-for-yoto-player.git
 cd music-scraper-for-yoto-player
 
 # 2. Create .env file with your API key
