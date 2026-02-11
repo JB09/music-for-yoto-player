@@ -1,0 +1,12 @@
+services:
+  yoto-scraper:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./downloads:/app/downloads
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - YOTO_CLIENT_ID=${YOTO_CLIENT_ID:-}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-}
+      - OUTPUT_DIR=/app/downloads

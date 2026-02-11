@@ -12,6 +12,9 @@ env/
 # Downloads
 downloads/
 
+# Secrets
+.env
+
 # IDE
 .vscode/
 .idea/

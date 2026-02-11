@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Results — Yoto Music Scraper{% endblock %}
+
+{% block steps %}
+<div class="steps">
+    <div class="step done"><div class="step-dot"></div> Build</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Review</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Match</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Download</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Download Complete</h2>
+    <p style="margin-bottom: 1rem;">
+        <span class="text-success">{{ success_count }}</span> /
+        {{ total }} songs downloaded successfully.
+    </p>
+
+    <ol class="song-list">
+        {% for r in results %}
+        <li>
+            <span>
+                <span class="song-title">{{ r.title }}</span>
+                <span class="song-artist"> — {{ r.artist }}</span>
+            </span>
+            <span style="margin-left: auto;">
+                {% if r.success %}
+                    <span class="text-success">✓</span>
+                {% else %}
+                    <span class="text-danger">Failed</span>
+                {% endif %}
+            </span>
+        </li>
+        {% endfor %}
+    </ol>
+</div>
+
+{% if yoto_available and success_count > 0 %}
+<div class="card" id="yotoCard">
+    <h2>Upload to Yoto</h2>
+    <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+        Create a MYO card playlist with your downloaded songs.
+    </p>
+
+    <div id="yotoForm">
+        <input type="text" id="cardName" placeholder="Playlist name (e.g. Bedtime Songs)"
+               style="margin-bottom: 0.75rem;">
+        <button onclick="uploadToYoto()" class="btn btn-primary btn-block">
+            Upload to Yoto &amp; Create MYO Card
+        </button>
+    </div>
+
+    <div id="yotoProgress" style="display: none;" class="text-center">
+        <div class="spinner"></div>
+        <p class="text-muted text-sm mt-1">Uploading to Yoto...</p>
+    </div>
+
+    <div id="yotoResult" style="display: none;"></div>
+</div>
+{% endif %}
+
+<div class="text-center mt-2">
+    <a href="/" class="btn btn-secondary">Start New Playlist</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if yoto_available and success_count > 0 %}
+<script>
+function uploadToYoto() {
+    const name = document.getElementById('cardName').value.trim() || 'My Playlist';
+    document.getElementById('yotoForm').style.display = 'none';
+    document.getElementById('yotoProgress').style.display = 'block';
+
+    const form = new FormData();
+    form.append('card_name', name);
+
+    fetch('/yoto/upload', { method: 'POST', body: form })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('yotoProgress').style.display = 'none';
+            const result = document.getElementById('yotoResult');
+            result.style.display = 'block';
+
+            if (data.success) {
+                result.innerHTML = `
+                    <p class="text-success" style="font-weight: 500; margin-bottom: 0.5rem;">
+                        MYO card created!
+                    </p>
+                    <p class="text-sm text-muted">
+                        Card ID: ${data.cardId}<br>
+                        Tracks uploaded: ${data.tracksUploaded}<br><br>
+                        Open the Yoto app to link this playlist to a physical MYO card.
+                    </p>`;
+            } else {
+                result.innerHTML = `<p class="text-danger">${data.error}</p>`;
+            }
+        })
+        .catch(err => {
+            document.getElementById('yotoProgress').style.display = 'none';
+            document.getElementById('yotoResult').style.display = 'block';
+            document.getElementById('yotoResult').innerHTML =
+                `<p class="text-danger">Upload failed: ${err.message}</p>`;
+        });
+}
+</script>
+{% endif %}
+{% endblock %}

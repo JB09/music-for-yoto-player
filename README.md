@@ -1,24 +1,63 @@
 # Yoto Music Scraper
 
-Download audio (MP3) from YouTube and optionally upload directly to a Yoto Player MYO card — all from the command line.
+Download audio (MP3) from YouTube and optionally upload directly to a Yoto Player MYO card.
+
+**Two interfaces:**
+- **Web UI** — step-by-step wizard in your browser (Docker or local)
+- **CLI** — command-line tool for scripting
 
 **Two ways to build your playlist:**
-- **AI Chat** (`--chat`) — describe what you want in natural language and Claude generates the song list
-- **Text file** — traditional `songs.txt` with one song per line
+- **AI Chat** — describe what you want in natural language and Claude generates the song list
+- **Text/Paste** — type or paste song names directly
 
-**Then the 3-phase pipeline runs:**
+**Then the pipeline runs:**
 1. **Shuffle & Cap** — randomizes the list and limits to 12 songs (configurable)
 2. **Search & Confirm** — searches YouTube Music, you pick the right match for each
 3. **Download** — downloads audio as MP3 via yt-dlp
 4. **Upload to Yoto** _(optional)_ — uploads to Yoto and creates a MYO card playlist
 
-## Prerequisites (Windows)
+---
+
+## Quick Start (Docker)
+
+The fastest way to get running:
+
+```bash
+# 1. Clone the repo
+git clone <repo-url>
+cd yoto-music-scraper
+
+# 2. Create .env file with your API key
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+
+# 3. Run with Docker Compose
+docker compose up --build
+```
+
+Open **http://localhost:5000** in your browser.
+
+Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
+
+### Docker environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
+| `YOTO_CLIENT_ID` | For Yoto upload | Yoto Developer API client ID |
+| `FLASK_SECRET_KEY` | No | Auto-generated if not set |
+
+---
+
+## Setup (Without Docker)
+
+### Prerequisites (Windows)
 
 1. **Python 3.10+** — [python.org/downloads](https://www.python.org/downloads/)
 2. **FFmpeg** — Required for audio conversion
    - `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
 
-## Setup
+### Install
 
 ```bash
 git clone <repo-url>
@@ -30,17 +69,33 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### For AI Chat mode
+### Set API key (for AI Chat mode)
 
-Set your Anthropic API key:
 ```bash
 set ANTHROPIC_API_KEY=sk-ant-...
 ```
 Get a key at [console.anthropic.com](https://console.anthropic.com/).
 
-## Usage
+---
 
-### AI Chat mode (recommended)
+## Web UI
+
+```bash
+python web_app.py
+```
+
+Open **http://localhost:5000**. The wizard walks you through:
+
+1. **Build** — AI chat or paste a song list
+2. **Review** — see the shuffled/capped playlist, reshuffle if needed
+3. **Match** — confirm the YouTube match for each song (one at a time)
+4. **Download** — downloads all MP3s, then optionally upload to Yoto
+
+---
+
+## CLI Usage
+
+### AI Chat mode
 
 ```bash
 python yoto_scraper.py --chat
@@ -58,11 +113,8 @@ The chat is multi-turn — refine the list until you're happy, then type `done`.
 ### Text file mode
 
 ```bash
-# Edit songs.txt with one song per line, then:
-python yoto_scraper.py
-
-# Custom song file:
-python yoto_scraper.py my_songs.txt
+python yoto_scraper.py                  # uses songs.txt
+python yoto_scraper.py my_songs.txt     # custom file
 ```
 
 ### With Yoto upload
@@ -72,7 +124,7 @@ python yoto_scraper.py --chat --yoto YOUR_CLIENT_ID
 python yoto_scraper.py --chat --yoto YOUR_CLIENT_ID --card-name "Bedtime Songs"
 ```
 
-### All options
+### All CLI options
 
 ```
 python yoto_scraper.py [songfile] [options]
@@ -89,6 +141,8 @@ Options:
   --card-name NAME    Name for the Yoto card (default: prompt at runtime)
 ```
 
+---
+
 ## Shuffle & Song Limit
 
 By default, the song list is **randomized** and **capped at 12 songs**. This is designed for Yoto MYO cards where you typically want a manageable playlist for kids.
@@ -101,9 +155,9 @@ By default, the song list is **randomized** and **capped at 12 songs**. This is 
 
 1. Go to [yoto.dev/get-started](https://yoto.dev/get-started/start-here/) and register for a developer account
 2. Obtain your **Client ID** from the Yoto Developers portal
-3. Pass it via the `--yoto` flag
+3. Pass it via `--yoto` flag (CLI) or `YOTO_CLIENT_ID` env var (Docker/Web)
 
-The app uses the [OAuth2 Device Code flow](https://yoto.dev/authentication/auth/) — on first run it will display a URL and code. Open the URL, enter the code, and log in with your Yoto account. Tokens are saved to `~/.yoto-scraper-tokens.json` for reuse.
+The CLI uses the [OAuth2 Device Code flow](https://yoto.dev/authentication/auth/) — on first run it opens a browser for login. Tokens are saved to `~/.yoto-scraper-tokens.json` for reuse.
 
 ## Song File Format
 
@@ -121,22 +175,22 @@ Tip: Adding the artist name improves search accuracy, but just the song title wo
 ## How It Works
 
 ```
---chat  OR  songs.txt
-        │
-        ▼
-[Shuffle & Cap] → randomize, limit to 12 songs → confirm list
-        │
-        ▼
-[Phase 1] Search YouTube Music → show top 5 results → you confirm each
-        │
-        ▼
-[Phase 2] Download audio via yt-dlp → convert to MP3 (192kbps)
-        │
-        ▼
-[Phase 3] Upload MP3s to Yoto API → create MYO card playlist
-        │
-        ▼
-Open Yoto app → link playlist to physical MYO card (NFC tap or insert)
+AI Chat  OR  Paste songs  OR  songs.txt
+                │
+                ▼
+  [Shuffle & Cap] → randomize, limit to 12 songs → confirm list
+                │
+                ▼
+  [Phase 1] Search YouTube Music → show top 5 results → you confirm each
+                │
+                ▼
+  [Phase 2] Download audio via yt-dlp → convert to MP3 (192kbps)
+                │
+                ▼
+  [Phase 3] Upload MP3s to Yoto API → create MYO card playlist
+                │
+                ▼
+  Open Yoto app → link playlist to physical MYO card (NFC tap or insert)
 ```
 
 ## MYO Card Limits
@@ -153,13 +207,25 @@ Open Yoto app → link playlist to physical MYO card (NFC tap or insert)
 
 ```
 yoto-music-scraper/
-├── yoto_scraper.py    # Main CLI application
-├── playlist_chat.py   # AI chat playlist generator (Anthropic/Claude)
-├── yoto_client.py     # Yoto API client (auth, upload, card creation)
-├── songs.txt          # Your song list (edit this)
-├── requirements.txt   # Python dependencies
-├── downloads/         # Downloaded MP3s (created automatically)
-└── README.md
+├── web_app.py          # Flask web UI
+├── templates/          # HTML templates for web UI
+│   ├── base.html       #   Shared layout + styles
+│   ├── index.html      #   Home (choose input mode)
+│   ├── chat.html       #   AI chat interface
+│   ├── text_input.html #   Paste song list
+│   ├── review.html     #   Review shuffled playlist
+│   ├── match.html      #   Confirm YouTube matches
+│   ├── download.html   #   Download progress
+│   └── results.html    #   Results + Yoto upload
+├── yoto_scraper.py     # CLI application
+├── playlist_chat.py    # AI chat playlist generator
+├── yoto_client.py      # Yoto API client
+├── songs.txt           # Song list (for CLI text mode)
+├── Dockerfile          # Docker image
+├── docker-compose.yml  # Docker Compose config
+├── .env.example        # Environment variable template
+├── requirements.txt    # Python dependencies
+└── downloads/          # Downloaded MP3s
 ```
 
 ## Note on the Physical Card Step

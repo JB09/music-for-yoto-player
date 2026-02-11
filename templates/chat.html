@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}AI Chat — Yoto Music Scraper{% endblock %}
+
+{% block steps %}
+<div class="steps">
+    <div class="step active"><div class="step-dot"></div> Build</div>
+    <span class="step-arrow">›</span>
+    <div class="step"><div class="step-dot"></div> Review</div>
+    <span class="step-arrow">›</span>
+    <div class="step"><div class="step-dot"></div> Match</div>
+    <span class="step-arrow">›</span>
+    <div class="step"><div class="step-dot"></div> Download</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Build Your Playlist with AI</h2>
+
+    <div class="chat-messages" id="chatMessages">
+        {% if not messages %}
+        <p class="text-muted text-sm" style="padding: 1rem; text-align: center;">
+            Describe the playlist you want. Try:<br>
+            "Disney songs for a 5-year-old"<br>
+            "Calming bedtime lullabies"<br>
+            "Upbeat kids dance party songs"
+        </p>
+        {% endif %}
+        {% for msg in messages %}
+        <div class="chat-msg {{ msg.role }}">
+            <div class="role">{{ 'You' if msg.role == 'user' else 'Claude' }}</div>
+            {% if msg.role == 'assistant' %}
+                {# Show just the summary, not raw JSON #}
+                {% set parts = msg.content.split('```') %}
+                {% if parts|length >= 3 %}
+                    <div>{{ parts[-1].strip() }}</div>
+                {% else %}
+                    <div>{{ msg.content }}</div>
+                {% endif %}
+            {% else %}
+                <div>{{ msg.content }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if songs %}
+    <div style="background: #0f172a; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 0.5rem;">
+            Current Playlist ({{ songs|length }} songs)
+        </div>
+        <ol class="song-list">
+            {% for s in songs %}
+            <li>
+                <span>
+                    <span class="song-title">{{ s.title }}</span>
+                    <span class="song-artist"> — {{ s.artist }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ol>
+    </div>
+
+    <div class="flex gap-sm">
+        <form action="/chat/accept" method="post" style="flex: 1;">
+            <button type="submit" class="btn btn-success btn-block">
+                Accept Playlist &amp; Continue
+            </button>
+        </form>
+    </div>
+    <p class="text-muted text-sm mt-1 text-center">
+        Or keep chatting to refine the list.
+    </p>
+    {% endif %}
+
+    <form action="/chat/send" method="post" class="mt-1">
+        <div class="flex gap-sm">
+            <input type="text" name="message" placeholder="Describe your playlist..."
+                   autofocus autocomplete="off" style="flex: 1;">
+            <button type="submit" class="btn btn-primary">Send</button>
+        </div>
+    </form>
+</div>
+
+<div class="text-center mt-1">
+    <a href="/" class="text-muted text-sm">← Start over</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const el = document.getElementById('chatMessages');
+    if (el) el.scrollTop = el.scrollHeight;
+</script>
+{% endblock %}

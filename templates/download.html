@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Download — Yoto Music Scraper{% endblock %}
+
+{% block steps %}
+<div class="steps">
+    <div class="step done"><div class="step-dot"></div> Build</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Review</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Match</div>
+    <span class="step-arrow">›</span>
+    <div class="step active"><div class="step-dot"></div> Download</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card" id="downloadCard">
+    <h2>Ready to Download</h2>
+    <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+        {{ songs|length }} song{{ 's' if songs|length != 1 else '' }} confirmed.
+        Click below to download audio from YouTube.
+    </p>
+
+    <ol class="song-list" id="songList">
+        {% for s in songs %}
+        <li id="song-{{ loop.index0 }}">
+            <span>
+                <span class="song-title">{{ s.title }}</span>
+                <span class="song-artist"> — {{ s.artist }}</span>
+            </span>
+            <span class="status" style="margin-left: auto;"></span>
+        </li>
+        {% endfor %}
+    </ol>
+
+    <div id="preDownload" class="mt-2">
+        <button onclick="startDownload()" class="btn btn-success btn-block btn-lg">
+            Download All MP3s
+        </button>
+    </div>
+
+    <div id="downloading" style="display: none;" class="mt-2 text-center">
+        <div class="spinner"></div>
+        <p class="text-muted text-sm mt-1">Downloading and converting... This may take a few minutes.</p>
+        <div class="progress-bar mt-1">
+            <div class="progress-fill" id="dlProgress" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startDownload() {
+    document.getElementById('preDownload').style.display = 'none';
+    document.getElementById('downloading').style.display = 'block';
+
+    fetch('/download/start', { method: 'POST' })
+        .then(r => r.json())
+        .then(results => {
+            document.getElementById('dlProgress').style.width = '100%';
+            results.forEach((r, i) => {
+                const el = document.getElementById('song-' + i);
+                const status = el.querySelector('.status');
+                if (r.success) {
+                    status.innerHTML = '<span class="text-success">✓</span>';
+                } else {
+                    status.innerHTML = '<span class="text-danger">✗</span>';
+                }
+            });
+            setTimeout(() => {
+                window.location.href = '/download/results';
+            }, 1000);
+        })
+        .catch(err => {
+            document.getElementById('downloading').innerHTML =
+                '<p class="text-danger">Download failed: ' + err.message + '</p>';
+        });
+}
+</script>
+{% endblock %}

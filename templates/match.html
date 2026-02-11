@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Match Songs — Yoto Music Scraper{% endblock %}
+
+{% block steps %}
+<div class="steps">
+    <div class="step done"><div class="step-dot"></div> Build</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Review</div>
+    <span class="step-arrow">›</span>
+    <div class="step active"><div class="step-dot"></div> Match</div>
+    <span class="step-arrow">›</span>
+    <div class="step"><div class="step-dot"></div> Download</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Song {{ current }} of {{ total }}</h2>
+        <span class="text-muted text-sm">{{ confirmed_count }} confirmed</span>
+    </div>
+    <div class="progress-bar">
+        <div class="progress-fill" style="width: {{ (current / total * 100)|int }}%"></div>
+    </div>
+
+    <p style="margin: 1rem 0; font-size: 1rem;">
+        Searching: <strong>"{{ query }}"</strong>
+    </p>
+
+    {% if results %}
+    <div style="margin-bottom: 1rem;">
+        {% for r in results %}
+        <form action="/match" method="post" style="margin: 0;">
+            <input type="hidden" name="action" value="select">
+            <input type="hidden" name="song_data" value='{{ r|tojson }}'>
+            <button type="submit" class="yt-result" style="width: 100%; text-align: left; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; font-family: inherit; font-size: inherit;">
+                <div class="song-title">{{ r.title }}</div>
+                <div class="song-artist">{{ r.artist }}
+                    {% if r.album %}<span class="song-meta"> · {{ r.album }}</span>{% endif %}
+                    {% if r.duration %}<span class="song-meta"> · {{ r.duration }}</span>{% endif %}
+                </div>
+            </button>
+        </form>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No results found for this search.</p>
+    {% endif %}
+
+    <div class="flex gap-sm mt-1">
+        <form action="/match" method="post" style="flex: 1;">
+            <input type="hidden" name="action" value="retry">
+            <div class="flex gap-sm">
+                <input type="text" name="new_query" placeholder="Try different search..."
+                       value="{{ query }}" style="flex: 1;">
+                <button type="submit" class="btn btn-secondary">Retry</button>
+            </div>
+        </form>
+        <form action="/match" method="post">
+            <input type="hidden" name="action" value="skip">
+            <button type="submit" class="btn btn-danger">Skip</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Yoto Music Scraper{% endblock %}
+
+{% block content %}
+<div class="card text-center">
+    <h2>How do you want to build your playlist?</h2>
+    <p class="text-muted text-sm" style="margin-bottom: 1.5rem;">
+        Songs will be shuffled and capped at 12 tracks for your Yoto MYO card.
+    </p>
+    <div class="flex gap-md" style="justify-content: center; flex-wrap: wrap;">
+        <a href="/chat" class="btn btn-primary btn-lg">AI Chat</a>
+        <a href="/text" class="btn btn-secondary btn-lg">Paste Song List</a>
+    </div>
+    <p class="text-muted text-sm mt-2">
+        <strong>AI Chat</strong> — describe what you want (e.g. "bedtime songs for a toddler") and Claude builds the list.<br>
+        <strong>Paste</strong> — type or paste song names directly, one per line.
+    </p>
+</div>
+{% endblock %}
