@@ -192,11 +192,22 @@ def upload_to_yoto(downloaded_songs: list[dict], client_id: str, card_name: str)
         print("\n  No tracks were uploaded successfully.")
         return
 
+    # Select an icon for the card
+    icon_media_id = None
+    try:
+        from icon_selector import select_icon_for_card
+        song_titles = [t["title"] for t in tracks]
+        icon_media_id = select_icon_for_card(client, song_titles, card_name)
+    except Exception as e:
+        print(f"  Icon selection failed (continuing without icon): {e}")
+
     print(f"\n  Creating MYO card: \"{card_name}\" ({len(tracks)} tracks)...")
     try:
-        card = client.create_myo_card(card_name, tracks)
+        card = client.create_myo_card(card_name, tracks, icon_media_id=icon_media_id)
         card_id = card.get("cardId", card.get("_id", "unknown"))
         print(f"  MYO card created! Card ID: {card_id}")
+        if icon_media_id:
+            print(f"  Card icon set: {icon_media_id}")
         print(f"\n  Next step: Open the Yoto app and link this playlist to a")
         print(f"  physical MYO card (tap with NFC or insert into player).")
     except Exception as e:

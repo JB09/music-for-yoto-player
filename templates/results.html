@@ -50,6 +50,16 @@
     <div id="yotoForm">
         <input type="text" id="cardName" placeholder="Playlist name (e.g. Bedtime Songs)"
                style="margin-bottom: 0.75rem;">
+        <div style="margin-bottom: 0.75rem;">
+            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
+                Card Icon
+            </label>
+            <select id="iconMode" style="width: 100%; padding: 0.5rem; border-radius: 6px;
+                    border: 1px solid #334155; background: #1e293b; color: #e2e8f0;">
+                <option value="public">Auto-select from Yoto public icons (AI picks best match)</option>
+                <option value="generate">Generate custom 16x16 pixel art icon (AI created)</option>
+            </select>
+        </div>
         <button onclick="uploadToYoto()" class="btn btn-primary btn-block">
             Upload to Yoto &amp; Create MYO Card
         </button>
@@ -74,11 +84,13 @@
 <script>
 function uploadToYoto() {
     const name = document.getElementById('cardName').value.trim() || 'My Playlist';
+    const iconMode = document.getElementById('iconMode').value;
     document.getElementById('yotoForm').style.display = 'none';
     document.getElementById('yotoProgress').style.display = 'block';
 
     const form = new FormData();
     form.append('card_name', name);
+    form.append('icon_mode', iconMode);
 
     fetch('/yoto/upload', { method: 'POST', body: form })
         .then(r => r.json())
@@ -88,13 +100,16 @@ function uploadToYoto() {
             result.style.display = 'block';
 
             if (data.success) {
+                const iconMsg = data.iconSet
+                    ? '<br>Card icon: set'
+                    : '<br>Card icon: none (can be set in Yoto app)';
                 result.innerHTML = `
                     <p class="text-success" style="font-weight: 500; margin-bottom: 0.5rem;">
                         MYO card created!
                     </p>
                     <p class="text-sm text-muted">
                         Card ID: ${data.cardId}<br>
-                        Tracks uploaded: ${data.tracksUploaded}<br><br>
+                        Tracks uploaded: ${data.tracksUploaded}${iconMsg}<br><br>
                         Open the Yoto app to link this playlist to a physical MYO card.
                     </p>`;
             } else {

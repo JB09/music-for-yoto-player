@@ -369,13 +369,26 @@ def yoto_upload():
     if not tracks:
         return jsonify({"error": "All uploads failed", "details": errors}), 500
 
+    # Select an icon for the card via AI
+    icon_media_id = None
     try:
-        card = client.create_myo_card(card_name, tracks)
+        from icon_selector import select_icon_for_card
+        song_titles = [t["title"] for t in tracks]
+        prefer_generate = request.form.get("icon_mode") == "generate"
+        icon_media_id = select_icon_for_card(
+            client, song_titles, card_name, prefer_generate=prefer_generate,
+        )
+    except Exception as e:
+        errors.append(f"Icon selection failed: {e}")
+
+    try:
+        card = client.create_myo_card(card_name, tracks, icon_media_id=icon_media_id)
         card_id = card.get("cardId", card.get("_id", "unknown"))
         return jsonify({
             "success": True,
             "cardId": card_id,
             "tracksUploaded": len(tracks),
+            "iconSet": icon_media_id is not None,
             "errors": errors,
         })
     except Exception as e:

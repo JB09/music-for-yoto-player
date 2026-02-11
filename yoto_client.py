@@ -226,7 +226,8 @@ class YotoClient:
 
     # ── Card/Playlist Creation ──────────────────────────────────────
 
-    def create_myo_card(self, title: str, tracks: list[dict]) -> dict:
+    def create_myo_card(self, title: str, tracks: list[dict],
+                        icon_media_id: str | None = None) -> dict:
         """
         Create a MYO card with the given tracks.
 
@@ -237,11 +238,15 @@ class YotoClient:
             fileSize: int (bytes)
             channels: str ("stereo" or "mono")
             format: str ("aac")
+
+        icon_media_id: optional Yoto icon mediaId (used as yoto:#<mediaId>)
         """
+        icon_ref = f"yoto:#{icon_media_id}" if icon_media_id else None
+
         chapters = []
         for i, track in enumerate(tracks):
             key = f"{i + 1:02d}"
-            chapters.append({
+            chapter = {
                 "key": key,
                 "title": track["title"],
                 "overlayLabel": str(i + 1),
@@ -256,7 +261,10 @@ class YotoClient:
                     "type": "audio",
                     "overlayLabel": str(i + 1),
                 }],
-            })
+            }
+            if icon_ref:
+                chapter["display"] = {"icon16x16": icon_ref}
+            chapters.append(chapter)
 
         total_duration = sum(t.get("duration", 0) for t in tracks)
         total_size = sum(t.get("fileSize", 0) for t in tracks)
@@ -286,6 +294,43 @@ class YotoClient:
         )
         resp.raise_for_status()
         return resp.json().get("card", resp.json())
+
+    # ── Icons ────────────────────────────────────────────────────────
+
+    def get_public_icons(self) -> list[dict]:
+        """Fetch all public/shared display icons from Yoto."""
+        resp = requests.get(
+            f"{API_BASE}/media/displayIcons/shared",
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json().get("displayIcons", [])
+
+    def upload_custom_icon(self, image_data: bytes, filename: str = "icon.png",
+                           auto_convert: bool = True) -> dict:
+        """
+        Upload a custom 16x16 icon to Yoto.
+
+        Args:
+            image_data: Raw PNG image bytes (16x16 px recommended).
+            filename: Filename for the upload.
+            auto_convert: If True, Yoto resizes/converts to 16x16 PNG automatically.
+
+        Returns:
+            dict with 'mediaId', 'url', etc.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "image/png",
+        }
+        resp = requests.post(
+            f"{API_BASE}/media/displayIcons/user/me/upload",
+            params={"autoConvert": str(auto_convert).lower(), "filename": filename},
+            data=image_data,
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return resp.json().get("displayIcon", resp.json())
 
     # ── Utilities ───────────────────────────────────────────────────
 
