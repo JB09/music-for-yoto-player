@@ -25,7 +25,7 @@ MAX_SONGS = 12
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "downloads")
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
 ytmusic = YTMusic()
 
