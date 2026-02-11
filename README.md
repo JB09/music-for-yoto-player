@@ -25,7 +25,7 @@ The fastest way to get running:
 ```bash
 # 1. Clone the repo
 git clone <repo-url>
-cd yoto-music-scraper
+cd music-scraper-for-yoto-player
 
 # 2. Create .env file with your API key
 cp .env.example .env
@@ -61,7 +61,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 
 ```bash
 git clone <repo-url>
-cd yoto-music-scraper
+cd music-scraper-for-yoto-player
 
 python -m venv .venv
 .venv\Scripts\activate
@@ -206,7 +206,7 @@ AI Chat  OR  Paste songs  OR  songs.txt
 ## File Structure
 
 ```
-yoto-music-scraper/
+music-scraper-for-yoto-player/
 ├── web_app.py          # Flask web UI
 ├── templates/          # HTML templates for web UI
 │   ├── base.html       #   Shared layout + styles
