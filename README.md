@@ -182,6 +182,15 @@ For the Web UI's OAuth flow to work, you must add a **callback URL** in the Yoto
 
 > **Note:** All callback URLs must use `https://` in production. `http://` is only accepted for `localhost`.
 
+**Troubleshooting: "Callback URL mismatch"**
+
+If you see _"The provided redirect_uri is not in the list of allowed callback URLs"_ after clicking "Connect to Yoto":
+
+1. Verify the callback URL in your Yoto Developer portal **exactly** matches `http://localhost:5000/yoto/callback` (no trailing slash, correct port)
+2. If accessing via `127.0.0.1` instead of `localhost`, add `http://127.0.0.1:5000/yoto/callback` as well
+3. If running on a non-default port, update the URL to match (e.g. `http://localhost:8080/yoto/callback`)
+4. Changes in the Yoto Developer portal may take a few minutes to propagate
+
 Tokens are saved to `~/.yoto-scraper-tokens.json` and reused across sessions.
 
 ## Song File Format
