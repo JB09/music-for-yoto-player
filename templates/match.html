@@ -47,7 +47,8 @@
         {% for r in results %}
         <div class="yt-result-wrapper" style="margin-bottom: 0.5rem;">
             <div style="display: flex; gap: 0.5rem; align-items: stretch;">
-                <form action="/match" method="post" style="margin: 0; flex: 1;">
+                <form action="/match" method="post" style="margin: 0; flex: 1;"
+                      {% if r.downloaded %}onsubmit="return handleDownloadedSelect(event, this)"{% endif %}>
                     <input type="hidden" name="action" value="select">
                     <input type="hidden" name="song_data" value='{{ r|tojson }}'>
                     <button type="submit" class="yt-result" style="width: 100%; height: 100%; text-align: left; background: #0f172a; color: #e2e8f0; border: 1px solid {% if r.downloaded %}#22c55e{% elif r.partial_match %}#eab308{% else %}#334155{% endif %}; font-family: inherit; font-size: inherit;">
@@ -86,10 +87,60 @@
     <p class="text-muted">No results found for this search.</p>
     {% endif %}
 </div>
+
+<!-- Confirmation dialog for already-downloaded files -->
+<div id="overwriteDialog" style="display: none; position: fixed; inset: 0; z-index: 100;
+        background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;">
+    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+                padding: 1.5rem; max-width: 400px; width: 90%; margin: auto;
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <h3 style="margin: 0 0 0.75rem;">File already downloaded</h3>
+        <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+            This song already exists in your downloads folder. Would you like to use the
+            existing file or re-download it?
+        </p>
+        <div style="display: flex; gap: 0.5rem;">
+            <button id="useExistingBtn" class="btn btn-primary" style="flex: 1;">
+                Use existing file
+            </button>
+            <button id="redownloadBtn" class="btn btn-secondary" style="flex: 1;">
+                Re-download
+            </button>
+        </div>
+        <button id="cancelOverwriteBtn" class="btn btn-secondary btn-block"
+                style="margin-top: 0.5rem; font-size: 0.85rem;">
+            Cancel
+        </button>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function handleDownloadedSelect(e, form) {
+    e.preventDefault();
+    var dialog = document.getElementById('overwriteDialog');
+    dialog.style.display = 'flex';
+
+    var songDataInput = form.querySelector('input[name="song_data"]');
+    var songData = JSON.parse(songDataInput.value);
+
+    document.getElementById('useExistingBtn').onclick = function() {
+        dialog.style.display = 'none';
+        form.submit();
+    };
+    document.getElementById('redownloadBtn').onclick = function() {
+        dialog.style.display = 'none';
+        songData.force_download = true;
+        songDataInput.value = JSON.stringify(songData);
+        form.submit();
+    };
+    document.getElementById('cancelOverwriteBtn').onclick = function() {
+        dialog.style.display = 'none';
+    };
+    return false;
+}
+
 var playSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
 var stopSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>';
 

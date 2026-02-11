@@ -133,13 +133,14 @@ def search_youtube_music(query: str, num_results: int = 5) -> list[dict]:
     return parsed
 
 
-def download_audio(video_id: str, title: str, artist: str) -> str | None:
+def download_audio(video_id: str, title: str, artist: str,
+                    force: bool = False) -> str | None:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     safe_filename = f"{artist} - {title}".replace("/", "-").replace("\\", "-")
 
-    # Skip download if the file already exists
+    # Skip download if the file already exists (unless force re-download)
     mp3_path = os.path.join(OUTPUT_DIR, f"{safe_filename}.mp3")
-    if os.path.exists(mp3_path):
+    if not force and os.path.exists(mp3_path):
         return mp3_path
 
     outtmpl = os.path.join(OUTPUT_DIR, f"{safe_filename}.%(ext)s")
@@ -398,7 +399,9 @@ def download_start():
     results = []
 
     for song in confirmed:
-        filepath = download_audio(song["videoId"], song["title"], song["artist"])
+        force = song.get("force_download", False)
+        filepath = download_audio(song["videoId"], song["title"], song["artist"],
+                                  force=force)
         results.append({
             "title": song["title"],
             "artist": song["artist"],
