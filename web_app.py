@@ -443,12 +443,105 @@ def yoto_cards():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Icon Preview ───────────────────────────────────────────────────
+
+
+@app.route("/yoto/icon/preview", methods=["POST"])
+def yoto_icon_preview():
+    """Generate or select an icon and return it as a base64 data URL for preview."""
+    from yoto_client import YotoClient
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    if not client_id:
+        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
+
+    client = YotoClient(client_id)
+    if not client.is_authenticated():
+        return jsonify({"error": "Not authenticated"}), 401
+
+    mode = request.form.get("mode", "generate")
+    card_name = request.form.get("card_name", "My Playlist")
+    keywords = request.form.get("keywords", "").strip()
+
+    results = session.get("download_results", [])
+    successful = [r for r in results if r["success"]]
+    song_titles = [f"{s['title']} - {s['artist']}" for s in successful]
+
+    if keywords:
+        card_name = f"{card_name} ({keywords})"
+
+    if mode == "generate":
+        import base64
+        from icon_selector import generate_custom_icon
+        try:
+            icon_bytes = generate_custom_icon(song_titles, card_name)
+            if icon_bytes:
+                b64 = base64.b64encode(icon_bytes).decode("ascii")
+                return jsonify({
+                    "preview": f"data:image/png;base64,{b64}",
+                    "mode": "generate",
+                })
+            else:
+                return jsonify({"error": "Icon generation failed. Try again or add keywords."}), 500
+        except Exception as e:
+            return jsonify({"error": f"Icon generation failed: {e}"}), 500
+    else:
+        # mode == "public" — pick from public icons and return the URL
+        from icon_selector import select_public_icon
+        try:
+            public_icons = client.get_public_icons()
+            if not public_icons:
+                return jsonify({"error": "No public icons available"}), 500
+            chosen = select_public_icon(public_icons, song_titles, card_name)
+            if chosen:
+                return jsonify({
+                    "preview": chosen.get("url", ""),
+                    "mode": "public",
+                    "iconId": chosen.get("mediaId") or chosen.get("_id", ""),
+                    "reason": chosen.get("_selection_reason", ""),
+                })
+            else:
+                return jsonify({"error": "Could not select a matching icon"}), 500
+        except Exception as e:
+            return jsonify({"error": f"Icon selection failed: {e}"}), 500
+
+
+@app.route("/yoto/icon/upload", methods=["POST"])
+def yoto_icon_upload():
+    """Upload a previewed generated icon to Yoto and return the mediaId."""
+    from yoto_client import YotoClient
+    import base64
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    if not client_id:
+        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
+
+    client = YotoClient(client_id)
+    if not client.is_authenticated():
+        return jsonify({"error": "Not authenticated"}), 401
+
+    data_url = request.form.get("icon_data_url", "")
+    if not data_url.startswith("data:image/png;base64,"):
+        return jsonify({"error": "Invalid icon data"}), 400
+
+    b64 = data_url.split(",", 1)[1]
+    icon_bytes = base64.b64decode(b64)
+
+    try:
+        result = client.upload_custom_icon(icon_bytes, filename="playlist-icon.png")
+        media_id = result.get("mediaId") or result.get("_id", "")
+        return jsonify({"iconMediaId": media_id})
+    except Exception as e:
+        return jsonify({"error": f"Icon upload failed: {e}"}), 500
+
+
 # ── Yoto Upload (background worker) ────────────────────────────────
 
 
 def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
                     icon_mode: str, client_id: str,
-                    existing_card_id: str | None = None):
+                    existing_card_id: str | None = None,
+                    confirmed_icon_id: str | None = None):
     """Background thread that uploads tracks to Yoto and creates/updates a card."""
     from yoto_client import YotoClient
 
@@ -456,11 +549,19 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
     client = YotoClient(client_id)
 
     # If adding to an existing card, fetch it first to get existing tracks
+    existing_icon_id = None
     existing_tracks = []
     if existing_card_id:
         try:
             job["current_title"] = "Loading existing card..."
             card_data = client.get_card(existing_card_id)
+            # Capture the existing card's icon so new tracks get it too
+            for ch in card_data.get("content", {}).get("chapters", []):
+                display = ch.get("display", {})
+                icon_ref = display.get("icon16x16", "")
+                if icon_ref.startswith("yoto:#"):
+                    existing_icon_id = icon_ref.replace("yoto:#", "")
+                    break
             existing_chapters = card_data.get("content", {}).get("chapters", [])
             for ch in existing_chapters:
                 ch_tracks = ch.get("tracks", [])
@@ -524,11 +625,14 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
         return
 
     if existing_card_id:
-        # Merge existing + new tracks and update the card
+        # Merge existing + new tracks and update the card, preserving the icon
         all_tracks = existing_tracks + tracks
         job["current_title"] = "Updating existing card..."
         try:
-            card = client.update_myo_card(existing_card_id, card_name, all_tracks)
+            card = client.update_myo_card(
+                existing_card_id, card_name, all_tracks,
+                icon_media_id=existing_icon_id,
+            )
             card_id = card.get("cardId", card.get("_id", "unknown"))
             job["status"] = "done"
             job["result"] = {
@@ -536,7 +640,7 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
                 "cardId": card_id,
                 "tracksUploaded": len(tracks),
                 "totalTracks": len(all_tracks),
-                "iconSet": False,
+                "iconSet": existing_icon_id is not None,
                 "errors": errors,
                 "updated": True,
             }
@@ -545,19 +649,19 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
             job["result"] = {"error": f"Card update failed: {e}"}
         return
 
-    job["current_title"] = "Selecting card icon..."
-
-    # Select an icon for the card via AI
-    icon_media_id = None
-    try:
-        from icon_selector import select_icon_for_card
-        song_titles = [t["title"] for t in tracks]
-        prefer_generate = icon_mode == "generate"
-        icon_media_id = select_icon_for_card(
-            client, song_titles, card_name, prefer_generate=prefer_generate,
-        )
-    except Exception as e:
-        errors.append(f"Icon selection failed: {e}")
+    # Use pre-confirmed icon if provided, otherwise select/generate one
+    icon_media_id = confirmed_icon_id
+    if not icon_media_id:
+        job["current_title"] = "Selecting card icon..."
+        try:
+            from icon_selector import select_icon_for_card
+            song_titles = [t["title"] for t in tracks]
+            prefer_generate = icon_mode == "generate"
+            icon_media_id = select_icon_for_card(
+                client, song_titles, card_name, prefer_generate=prefer_generate,
+            )
+        except Exception as e:
+            errors.append(f"Icon selection failed: {e}")
 
     job["current_title"] = "Creating MYO card..."
 
@@ -588,6 +692,7 @@ def yoto_upload():
     card_name = request.form.get("card_name", "My Playlist")
     icon_mode = request.form.get("icon_mode", "public")
     existing_card_id = request.form.get("existing_card_id", "").strip() or None
+    confirmed_icon_id = request.form.get("confirmed_icon_id", "").strip() or None
     results = session.get("download_results", [])
     successful = [r for r in results if r["success"]]
 
@@ -616,7 +721,7 @@ def yoto_upload():
     thread = threading.Thread(
         target=_run_upload_job,
         args=(job_id, successful, card_name, icon_mode, client_id,
-              existing_card_id),
+              existing_card_id, confirmed_icon_id),
         daemon=True,
     )
     thread.start()

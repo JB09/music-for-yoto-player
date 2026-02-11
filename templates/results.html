@@ -70,11 +70,85 @@
             <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
                 Card Icon
             </label>
-            <select id="iconMode" style="width: 100%; padding: 0.5rem; border-radius: 6px;
+            <select id="iconMode" onchange="onIconModeChange()"
+                    style="width: 100%; padding: 0.5rem; border-radius: 6px;
                     border: 1px solid #334155; background: #1e293b; color: #e2e8f0;">
                 <option value="public">Auto-select from Yoto public icons (AI picks best match)</option>
                 <option value="generate">Generate custom 16x16 pixel art icon (AI created)</option>
             </select>
+
+            <div id="iconPreviewSection" style="display: none; margin-top: 0.75rem;
+                    padding: 0.75rem; border: 1px solid #334155; border-radius: 8px;
+                    background: #0f172a;">
+                <div id="iconPreviewLoading" style="display: none;" class="text-center">
+                    <div class="spinner"></div>
+                    <p class="text-muted text-sm mt-1">Generating icon...</p>
+                </div>
+                <div id="iconPreviewResult" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                        <img id="iconPreviewImg" src="" alt="Icon preview"
+                             style="width: 64px; height: 64px; image-rendering: pixelated;
+                                    border: 1px solid #334155; border-radius: 4px;">
+                        <div style="flex: 1;">
+                            <p id="iconPreviewReason" class="text-muted text-sm"></p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button onclick="acceptIcon()" class="btn btn-primary" style="flex: 1;">
+                            Use this icon
+                        </button>
+                        <button onclick="retryIcon()" class="btn btn-secondary" style="flex: 1;">
+                            Try again
+                        </button>
+                    </div>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <input type="text" id="iconKeywords" placeholder="Add keywords (e.g. stars, ocean, animals)"
+                               style="flex: 1;">
+                        <button onclick="retryIconWithKeywords()" class="btn btn-secondary">
+                            Retry with keywords
+                        </button>
+                    </div>
+                    <div style="margin-top: 0.5rem; text-align: center;">
+                        <button onclick="switchIconMode()" class="btn btn-secondary btn-block" id="iconSwitchBtn"
+                                style="font-size: 0.8rem;">
+                            Switch to public icon library instead
+                        </button>
+                    </div>
+                </div>
+                <div id="iconPreviewError" style="display: none;">
+                    <p class="text-danger text-sm" id="iconPreviewErrorMsg"></p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button onclick="retryIcon()" class="btn btn-secondary" style="flex: 1;">Try again</button>
+                        <button onclick="switchIconMode()" class="btn btn-secondary" style="flex: 1;"
+                                id="iconSwitchBtnError">
+                            Try public icons instead
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="iconConfirmed" style="display: none; margin-top: 0.5rem;
+                    padding: 0.5rem 0.75rem; border: 1px solid #22c55e; border-radius: 8px;
+                    background: #0f2a1a; display: none;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <img id="iconConfirmedImg" src="" alt="Confirmed icon"
+                         style="width: 48px; height: 48px; image-rendering: pixelated;
+                                border-radius: 4px;">
+                    <div style="flex: 1;">
+                        <p class="text-success text-sm" style="font-weight: 500;">Icon confirmed</p>
+                        <button onclick="changeIcon()" class="text-sm"
+                                style="color: #94a3b8; background: none; border: none;
+                                       cursor: pointer; text-decoration: underline; padding: 0;">
+                            Change
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="previewIconBtn" onclick="previewIcon()"
+                    class="btn btn-secondary btn-block" style="margin-top: 0.5rem;">
+                Preview Icon
+            </button>
         </div>
         <button id="uploadBtn" onclick="uploadToYoto()" class="btn btn-primary btn-block">
             Upload to Yoto &amp; Create MYO Card
@@ -110,6 +184,9 @@
 <script>
 var newSongsCount = {{ success_count }};
 var existingCards = [];
+var confirmedIconId = '';      // mediaId of accepted icon (public or uploaded)
+var confirmedIconDataUrl = ''; // data URL of generated icon (before upload)
+var confirmedIconPreviewUrl = ''; // URL for display
 
 // Fetch existing cards for the dropdown on page load
 (function loadExistingCards() {
@@ -174,6 +251,165 @@ function onCardTargetChange() {
     }
 }
 
+function onIconModeChange() {
+    // Reset icon state when mode changes
+    confirmedIconId = '';
+    confirmedIconDataUrl = '';
+    confirmedIconPreviewUrl = '';
+    document.getElementById('iconConfirmed').style.display = 'none';
+    document.getElementById('iconPreviewSection').style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = '';
+
+    var mode = document.getElementById('iconMode').value;
+    var switchBtn = document.getElementById('iconSwitchBtn');
+    var switchBtnErr = document.getElementById('iconSwitchBtnError');
+    if (mode === 'generate') {
+        switchBtn.textContent = 'Switch to public icon library instead';
+        switchBtnErr.textContent = 'Try public icons instead';
+    } else {
+        switchBtn.textContent = 'Switch to AI-generated icon instead';
+        switchBtnErr.textContent = 'Try generating instead';
+    }
+}
+
+function previewIcon() {
+    var mode = document.getElementById('iconMode').value;
+    var cardName = document.getElementById('cardName').value.trim() || 'My Playlist';
+    var keywords = '';
+
+    _fetchIconPreview(mode, cardName, keywords);
+}
+
+function retryIcon() {
+    var mode = document.getElementById('iconMode').value;
+    var cardName = document.getElementById('cardName').value.trim() || 'My Playlist';
+    _fetchIconPreview(mode, cardName, '');
+}
+
+function retryIconWithKeywords() {
+    var mode = document.getElementById('iconMode').value;
+    var cardName = document.getElementById('cardName').value.trim() || 'My Playlist';
+    var keywords = document.getElementById('iconKeywords').value.trim();
+    _fetchIconPreview(mode, cardName, keywords);
+}
+
+function switchIconMode() {
+    var select = document.getElementById('iconMode');
+    select.value = select.value === 'generate' ? 'public' : 'generate';
+    onIconModeChange();
+    previewIcon();
+}
+
+function _fetchIconPreview(mode, cardName, keywords) {
+    var section = document.getElementById('iconPreviewSection');
+    var loading = document.getElementById('iconPreviewLoading');
+    var result = document.getElementById('iconPreviewResult');
+    var error = document.getElementById('iconPreviewError');
+
+    section.style.display = '';
+    loading.style.display = '';
+    result.style.display = 'none';
+    error.style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = 'none';
+    document.getElementById('iconConfirmed').style.display = 'none';
+
+    loading.querySelector('p').textContent = mode === 'generate'
+        ? 'Generating icon...' : 'Selecting icon...';
+
+    var form = new FormData();
+    form.append('mode', mode);
+    form.append('card_name', cardName);
+    form.append('keywords', keywords);
+
+    fetch('/yoto/icon/preview', { method: 'POST', body: form })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            if (data.error) {
+                error.style.display = '';
+                document.getElementById('iconPreviewErrorMsg').textContent = data.error;
+                return;
+            }
+            result.style.display = '';
+            document.getElementById('iconPreviewImg').src = data.preview;
+            var reason = document.getElementById('iconPreviewReason');
+            if (data.mode === 'public' && data.reason) {
+                reason.textContent = data.reason;
+            } else if (data.mode === 'generate') {
+                reason.textContent = 'AI-generated 16x16 pixel art';
+            } else {
+                reason.textContent = '';
+            }
+
+            // Store for later
+            if (data.mode === 'generate') {
+                confirmedIconDataUrl = data.preview;
+                confirmedIconId = '';
+            } else if (data.iconId) {
+                confirmedIconId = data.iconId;
+                confirmedIconDataUrl = '';
+            }
+            confirmedIconPreviewUrl = data.preview;
+        })
+        .catch(function(err) {
+            loading.style.display = 'none';
+            error.style.display = '';
+            document.getElementById('iconPreviewErrorMsg').textContent = 'Failed: ' + err.message;
+        });
+}
+
+function acceptIcon() {
+    // If it's a generated icon, we need to upload it first to get a mediaId
+    if (confirmedIconDataUrl && !confirmedIconId) {
+        var section = document.getElementById('iconPreviewSection');
+        var loading = document.getElementById('iconPreviewLoading');
+        var result = document.getElementById('iconPreviewResult');
+        loading.style.display = '';
+        loading.querySelector('p').textContent = 'Uploading icon to Yoto...';
+        result.style.display = 'none';
+
+        var form = new FormData();
+        form.append('icon_data_url', confirmedIconDataUrl);
+
+        fetch('/yoto/icon/upload', { method: 'POST', body: form })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                loading.style.display = 'none';
+                if (data.error) {
+                    result.style.display = '';
+                    document.getElementById('iconPreviewErrorMsg').textContent = data.error;
+                    document.getElementById('iconPreviewError').style.display = '';
+                    return;
+                }
+                confirmedIconId = data.iconMediaId;
+                _showConfirmedIcon();
+            })
+            .catch(function(err) {
+                loading.style.display = 'none';
+                result.style.display = '';
+            });
+    } else {
+        _showConfirmedIcon();
+    }
+}
+
+function _showConfirmedIcon() {
+    document.getElementById('iconPreviewSection').style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = 'none';
+    var confirmed = document.getElementById('iconConfirmed');
+    confirmed.style.display = '';
+    document.getElementById('iconConfirmedImg').src = confirmedIconPreviewUrl;
+}
+
+function changeIcon() {
+    confirmedIconId = '';
+    confirmedIconDataUrl = '';
+    confirmedIconPreviewUrl = '';
+    document.getElementById('iconConfirmed').style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = '';
+    document.getElementById('iconPreviewSection').style.display = 'none';
+}
+
 function uploadToYoto() {
     var name = document.getElementById('cardName').value.trim() || 'My Playlist';
     var iconMode = document.getElementById('iconMode').value;
@@ -186,6 +422,9 @@ function uploadToYoto() {
     form.append('icon_mode', iconMode);
     if (target !== 'new') {
         form.append('existing_card_id', target);
+    }
+    if (confirmedIconId) {
+        form.append('confirmed_icon_id', confirmedIconId);
     }
 
     fetch('/yoto/upload', { method: 'POST', body: form })
