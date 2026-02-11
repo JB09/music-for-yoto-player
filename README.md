@@ -193,6 +193,22 @@ AI Chat  OR  Paste songs  OR  songs.txt
   Open Yoto app → link playlist to physical MYO card (NFC tap or insert)
 ```
 
+## Card Icons
+
+When uploading to Yoto, the app automatically selects a 16x16 pixel display icon for your MYO card. There are two modes:
+
+- **Auto-select from public icons** _(default)_ — Fetches Yoto's shared icon library and uses AI to pick the best match based on your playlist name and song list (e.g. a music note for a music playlist, a moon for bedtime songs).
+- **Generate custom icon** — Uses AI to generate a custom 16x16 pixel art PNG tailored to your playlist theme, then uploads it to your Yoto account.
+
+The selected icon is set on every chapter of the card via the `display.icon16x16` field, which the Yoto Player shows during playback.
+
+In the **Web UI**, choose the icon mode from the dropdown on the upload screen. In the **CLI**, icon selection runs automatically (public icon matching first, with generated fallback).
+
+Icon requirements (per [Yoto Developer docs](https://yoto.dev/icons/uploading-icons/)):
+- 16x16 pixels
+- PNG (24-bit RGBA) or GIF
+- Auto-convert is available for larger images
+
 ## MYO Card Limits
 
 | Limit | Value |
@@ -220,6 +236,7 @@ music-scraper-for-yoto-player/
 ├── yoto_scraper.py     # CLI application
 ├── playlist_chat.py    # AI chat playlist generator
 ├── yoto_client.py      # Yoto API client
+├── icon_selector.py    # AI-powered card icon selection
 ├── songs.txt           # Song list (for CLI text mode)
 ├── Dockerfile          # Docker image
 ├── docker-compose.yml  # Docker Compose config
