@@ -48,7 +48,7 @@
         <div class="yt-result-wrapper" style="margin-bottom: 0.5rem;">
             <div style="display: flex; gap: 0.5rem; align-items: stretch;">
                 <form action="/match" method="post" style="margin: 0; flex: 1;"
-                      {% if r.downloaded %}onsubmit="return handleDownloadedSelect(event, this)"{% endif %}>
+                      {% if r.downloaded %}onsubmit="return handleFileConflict(event, this, 'exact')"{% elif r.partial_match %}onsubmit="return handleFileConflict(event, this, 'partial')"{% endif %}>
                     <input type="hidden" name="action" value="select">
                     <input type="hidden" name="song_data" value='{{ r|tojson }}'>
                     <button type="submit" class="yt-result" style="width: 100%; height: 100%; text-align: left; background: #0f172a; color: #e2e8f0; border: 1px solid {% if r.downloaded %}#22c55e{% elif r.partial_match %}#eab308{% else %}#334155{% endif %}; font-family: inherit; font-size: inherit;">
@@ -88,26 +88,19 @@
     {% endif %}
 </div>
 
-<!-- Confirmation dialog for already-downloaded files -->
-<div id="overwriteDialog" style="display: none; position: fixed; inset: 0; z-index: 100;
-        background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;">
+<!-- Confirmation dialog for file conflicts -->
+<div id="conflictDialog" style="display: none; position: fixed; inset: 0; z-index: 100;
+        background: rgba(0,0,0,0.6); align-items: center; justify-content: center;">
     <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px;
-                padding: 1.5rem; max-width: 400px; width: 90%; margin: auto;
+                padding: 1.5rem; max-width: 420px; width: 90%; margin: auto;
                 position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <h3 style="margin: 0 0 0.75rem;">File already downloaded</h3>
-        <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-            This song already exists in your downloads folder. Would you like to use the
-            existing file or re-download it?
-        </p>
-        <div style="display: flex; gap: 0.5rem;">
-            <button id="useExistingBtn" class="btn btn-primary" style="flex: 1;">
-                Use existing file
-            </button>
-            <button id="redownloadBtn" class="btn btn-secondary" style="flex: 1;">
-                Re-download
-            </button>
-        </div>
-        <button id="cancelOverwriteBtn" class="btn btn-secondary btn-block"
+        <h3 id="conflictTitle" style="margin: 0 0 0.5rem;"></h3>
+        <p id="conflictFilename" class="text-sm" style="margin-bottom: 0.5rem; color: #94a3b8;
+                word-break: break-all; font-family: monospace; background: #0f172a;
+                padding: 0.35rem 0.5rem; border-radius: 4px;"></p>
+        <p id="conflictMessage" class="text-muted text-sm" style="margin-bottom: 1rem;"></p>
+        <div id="conflictButtons"></div>
+        <button id="cancelConflictBtn" class="btn btn-secondary btn-block"
                 style="margin-top: 0.5rem; font-size: 0.85rem;">
             Cancel
         </button>
@@ -117,27 +110,79 @@
 
 {% block scripts %}
 <script>
-function handleDownloadedSelect(e, form) {
+function handleFileConflict(e, form, conflictType) {
     e.preventDefault();
-    var dialog = document.getElementById('overwriteDialog');
-    dialog.style.display = 'flex';
+    var dialog = document.getElementById('conflictDialog');
+    var titleEl = document.getElementById('conflictTitle');
+    var filenameEl = document.getElementById('conflictFilename');
+    var messageEl = document.getElementById('conflictMessage');
+    var buttonsEl = document.getElementById('conflictButtons');
 
     var songDataInput = form.querySelector('input[name="song_data"]');
     var songData = JSON.parse(songDataInput.value);
 
-    document.getElementById('useExistingBtn').onclick = function() {
+    // Build the filename that would be created
+    var wouldCreate = songData.artist + ' - ' + songData.title + '.mp3';
+
+    buttonsEl.innerHTML = '';
+
+    if (conflictType === 'exact') {
+        titleEl.textContent = 'File already exists';
+        filenameEl.textContent = wouldCreate;
+        messageEl.textContent = 'This exact filename is already in your downloads folder. ' +
+            'It may be the same recording, or a different version (e.g. different album or remix).';
+
+        var useBtn = document.createElement('button');
+        useBtn.className = 'btn btn-primary';
+        useBtn.style.cssText = 'flex: 1;';
+        useBtn.textContent = 'Use existing file';
+        useBtn.onclick = function() { dialog.style.display = 'none'; form.submit(); };
+
+        var dlBtn = document.createElement('button');
+        dlBtn.className = 'btn btn-secondary';
+        dlBtn.style.cssText = 'flex: 1;';
+        dlBtn.textContent = 'Re-download (overwrite)';
+        dlBtn.onclick = function() {
+            dialog.style.display = 'none';
+            songData.force_download = true;
+            songDataInput.value = JSON.stringify(songData);
+            form.submit();
+        };
+
+        buttonsEl.style.cssText = 'display: flex; gap: 0.5rem;';
+        buttonsEl.appendChild(useBtn);
+        buttonsEl.appendChild(dlBtn);
+
+    } else {
+        // partial match
+        titleEl.textContent = 'Similar file found';
+        filenameEl.textContent = songData.partial_match;
+        messageEl.textContent = 'A file with a similar name already exists. ' +
+            'Selecting this will download as "' + wouldCreate + '". ' +
+            'You can also skip this and use the existing file.';
+
+        var dlNewBtn = document.createElement('button');
+        dlNewBtn.className = 'btn btn-primary';
+        dlNewBtn.style.cssText = 'flex: 1;';
+        dlNewBtn.textContent = 'Download as new file';
+        dlNewBtn.onclick = function() { dialog.style.display = 'none'; form.submit(); };
+
+        var skipBtn = document.createElement('button');
+        skipBtn.className = 'btn btn-secondary';
+        skipBtn.style.cssText = 'flex: 1;';
+        skipBtn.textContent = 'Skip (keep existing)';
+        skipBtn.onclick = function() { dialog.style.display = 'none'; };
+
+        buttonsEl.style.cssText = 'display: flex; gap: 0.5rem;';
+        buttonsEl.appendChild(dlNewBtn);
+        buttonsEl.appendChild(skipBtn);
+    }
+
+    document.getElementById('cancelConflictBtn').onclick = function() {
         dialog.style.display = 'none';
-        form.submit();
     };
-    document.getElementById('redownloadBtn').onclick = function() {
-        dialog.style.display = 'none';
-        songData.force_download = true;
-        songDataInput.value = JSON.stringify(songData);
-        form.submit();
-    };
-    document.getElementById('cancelOverwriteBtn').onclick = function() {
-        dialog.style.display = 'none';
-    };
+
+    dialog.style.display = 'flex';
     return false;
 }
 
