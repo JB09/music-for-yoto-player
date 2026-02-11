@@ -30,17 +30,28 @@
     {% if results %}
     <div style="margin-bottom: 1rem;">
         {% for r in results %}
-        <form action="/match" method="post" style="margin: 0;">
-            <input type="hidden" name="action" value="select">
-            <input type="hidden" name="song_data" value='{{ r|tojson }}'>
-            <button type="submit" class="yt-result" style="width: 100%; text-align: left; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; font-family: inherit; font-size: inherit;">
-                <div class="song-title">{{ r.title }}</div>
-                <div class="song-artist">{{ r.artist }}
-                    {% if r.album %}<span class="song-meta"> · {{ r.album }}</span>{% endif %}
-                    {% if r.duration %}<span class="song-meta"> · {{ r.duration }}</span>{% endif %}
-                </div>
-            </button>
-        </form>
+        <div class="yt-result-wrapper" style="margin-bottom: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+                <form action="/match" method="post" style="margin: 0; flex: 1;">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="song_data" value='{{ r|tojson }}'>
+                    <button type="submit" class="yt-result" style="width: 100%; height: 100%; text-align: left; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; font-family: inherit; font-size: inherit;">
+                        <div class="song-title">{{ r.title }}</div>
+                        <div class="song-artist">{{ r.artist }}
+                            {% if r.album %}<span class="song-meta"> · {{ r.album }}</span>{% endif %}
+                            {% if r.duration %}<span class="song-meta"> · {{ r.duration }}</span>{% endif %}
+                        </div>
+                    </button>
+                </form>
+                <button type="button" class="btn btn-secondary preview-btn"
+                        data-video-id="{{ r.videoId }}"
+                        style="padding: 0.6rem; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-width: 44px;"
+                        title="Preview">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                </button>
+            </div>
+            <div class="preview-player" style="display: none; margin-top: 0.35rem; border-radius: 8px; overflow: hidden;"></div>
+        </div>
         {% endfor %}
     </div>
     {% else %}
@@ -62,4 +73,34 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.preview-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var wrapper = btn.closest('.yt-result-wrapper');
+        var player = wrapper.querySelector('.preview-player');
+        var videoId = btn.dataset.videoId;
+
+        // Close any other open previews
+        document.querySelectorAll('.preview-player').forEach(function(p) {
+            if (p !== player) {
+                p.style.display = 'none';
+                p.innerHTML = '';
+            }
+        });
+
+        // Toggle this preview
+        if (player.style.display === 'none') {
+            player.innerHTML = '<iframe width="100%" height="80" style="border:none;" src="https://www.youtube.com/embed/' + videoId + '?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+            player.style.display = 'block';
+        } else {
+            player.style.display = 'none';
+            player.innerHTML = '';
+        }
+    });
+});
+</script>
 {% endblock %}
