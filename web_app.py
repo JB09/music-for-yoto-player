@@ -500,7 +500,7 @@ def download_results():
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
 
     return render_template(
-        "results.html",
+        "finalize.html",
         results=results,
         total=len(results),
         success_count=sum(1 for r in results if r["success"]),
