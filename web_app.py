@@ -32,7 +32,7 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 ytmusic = YTMusic()
 
 # In-memory store for background upload jobs keyed by job_id.
-# Each entry: {"status": "running"|"done"|"error", "current": int,
+# Each entry: {"status": "running"|"done"|"error"|"cancelling", "current": int,
 #              "total": int, "current_title": str, "tracks": [], "errors": [],
 #              "result": dict|None}
 _upload_jobs: dict[str, dict] = {}
@@ -856,7 +856,12 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
 
     tracks = []
     errors = []
+    cancelled = False
     for i, song in enumerate(successful):
+        # Check if user requested cancellation before starting next track
+        if job["status"] == "cancelling":
+            cancelled = True
+            break
         job["current"] = i + 1
         job["current_title"] = song["title"]
         try:
@@ -871,6 +876,10 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
             })
         except Exception as e:
             errors.append(f"{song['title']}: {e}")
+            # Also check for cancellation after a failed upload
+            if job["status"] == "cancelling":
+                cancelled = True
+                break
 
     job["errors"] = errors
 
@@ -878,6 +887,9 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
         job["status"] = "error"
         job["result"] = {"error": "All uploads failed", "details": errors}
         return
+
+    if cancelled:
+        job["current_title"] = "Finishing with completed tracks..."
 
     if existing_card_id:
         # Merge existing + new tracks and update the card, preserving the icon
@@ -898,6 +910,8 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
                 "iconSet": existing_icon_id is not None,
                 "errors": errors,
                 "updated": True,
+                "cancelled": cancelled,
+                "totalRequested": len(successful),
             }
         except Exception as e:
             job["status"] = "error"
@@ -930,6 +944,8 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
             "tracksUploaded": len(tracks),
             "iconSet": icon_media_id is not None,
             "errors": errors,
+            "cancelled": cancelled,
+            "totalRequested": len(successful),
         }
     except Exception as e:
         job["status"] = "error"
@@ -998,12 +1014,27 @@ def yoto_upload_status():
         "current_title": job["current_title"],
     }
 
+    # Report "cancelling" as still running so the client keeps polling
+    if job["status"] == "cancelling":
+        resp["cancelling"] = True
+
     if job["status"] in ("done", "error"):
         resp["result"] = job["result"]
         # Clean up finished job
         _upload_jobs.pop(job_id, None)
 
     return jsonify(resp)
+
+
+@app.route("/yoto/upload/cancel", methods=["POST"])
+def yoto_upload_cancel():
+    job_id = request.form.get("job_id") or request.json.get("job_id", "")
+    job = _upload_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown job ID"}), 404
+    if job["status"] == "running":
+        job["status"] = "cancelling"
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

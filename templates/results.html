@@ -190,6 +190,9 @@
         <div class="spinner"></div>
         <p id="yotoProgressText" class="text-muted text-sm mt-1">Uploading to Yoto...</p>
         <p id="yotoProgressEta" class="text-muted text-sm" style="margin-top: 0.25rem;"></p>
+        <button id="cancelUploadBtn" onclick="cancelUpload()" class="btn btn-secondary" style="margin-top: 0.75rem; font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+            Stop &amp; use completed tracks
+        </button>
         <p class="text-sm" style="margin-top: 0.75rem; color: #eab308;">
             Please don't navigate away from this page — you won't be able to return to check the result.
         </p>
@@ -639,6 +642,7 @@ function changeIcon() {
 var uploadStartTime = 0;
 var lastCompletedTrack = 0;
 var trackCompletionTimes = [];
+var currentJobId = null;
 
 function uploadToYoto() {
     var name = document.getElementById('cardName').value.trim() || 'My Playlist';
@@ -669,6 +673,7 @@ function uploadToYoto() {
                 return;
             }
             if (data.job_id) {
+                currentJobId = data.job_id;
                 pollUploadStatus(data.job_id);
             }
         })
@@ -718,9 +723,13 @@ function pollUploadStatus(jobId) {
     fetch('/yoto/upload/status?job_id=' + encodeURIComponent(jobId))
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.status === 'running') {
+            if (data.status === 'running' || data.status === 'cancelling') {
                 var text = document.getElementById('yotoProgressText');
-                if (data.current > 0 && data.total > 0) {
+                if (data.cancelling) {
+                    text.textContent = 'Stopping after current track finishes...';
+                    document.getElementById('yotoProgressEta').textContent = '';
+                    document.getElementById('cancelUploadBtn').style.display = 'none';
+                } else if (data.current > 0 && data.total > 0) {
                     text.textContent = 'Uploading track ' + data.current +
                         ' of ' + data.total + ': ' + (data.current_title || '');
                     updateEta(data.current, data.total);
@@ -739,6 +748,18 @@ function pollUploadStatus(jobId) {
         });
 }
 
+function cancelUpload() {
+    if (!currentJobId) return;
+    var btn = document.getElementById('cancelUploadBtn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+    fetch('/yoto/upload/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: currentJobId })
+    });
+}
+
 function showUploadResult(data) {
     document.getElementById('yotoProgress').style.display = 'none';
     var result = document.getElementById('yotoResult');
@@ -747,6 +768,9 @@ function showUploadResult(data) {
     if (data.success) {
         var isUpdate = data.updated;
         var heading = isUpdate ? 'Tracks added to card!' : 'MYO card created!';
+        if (data.cancelled) {
+            heading = isUpdate ? 'Tracks added to card (stopped early)' : 'MYO card created (stopped early)';
+        }
         var iconMsg = '';
         if (isUpdate) {
             iconMsg = '<br>Total tracks on card: ' + (data.totalTracks || data.tracksUploaded);
@@ -755,13 +779,17 @@ function showUploadResult(data) {
                 ? '<br>Card icon: set'
                 : '<br>Card icon: none (can be set in Yoto app)';
         }
+        var trackInfo = 'Tracks uploaded: ' + data.tracksUploaded;
+        if (data.cancelled && data.totalRequested) {
+            trackInfo += ' of ' + data.totalRequested + ' (stopped by user)';
+        }
         result.innerHTML =
             '<p class="text-success" style="font-weight: 500; margin-bottom: 0.5rem;">' +
                 heading +
             '</p>' +
             '<p class="text-sm text-muted">' +
                 'Card ID: ' + data.cardId + '<br>' +
-                'Tracks uploaded: ' + data.tracksUploaded + iconMsg + '<br><br>' +
+                trackInfo + iconMsg + '<br><br>' +
                 'Open the Yoto app to link this playlist to a physical MYO card.' +
             '</p>';
     } else {
