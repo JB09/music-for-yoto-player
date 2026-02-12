@@ -1,4 +1,4 @@
-# Music Scraper for Yoto
+# Music for Yoto Player
 
 Download audio (MP3) from YouTube and optionally upload directly to a Yoto Player MYO card.
 

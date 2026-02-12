@@ -465,7 +465,7 @@ class YotoClient:
                 },
             },
             "metadata": {
-                "description": f"Created by Music Scraper for Yoto ({len(tracks)} tracks)",
+                "description": f"Created by Music for Yoto Player ({len(tracks)} tracks)",
                 "media": {
                     "duration": total_duration,
                     "fileSize": total_size,
@@ -593,7 +593,7 @@ class YotoClient:
                 },
             },
             "metadata": {
-                "description": f"Created by Music Scraper for Yoto ({len(tracks)} tracks)",
+                "description": f"Created by Music for Yoto Player ({len(tracks)} tracks)",
                 "media": {
                     "duration": total_duration,
                     "fileSize": total_size,

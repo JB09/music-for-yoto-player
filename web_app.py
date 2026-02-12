@@ -1,5 +1,5 @@
 """
-Music Scraper for Yoto - Web UI (Flask).
+Music for Yoto Player - Web UI (Flask).
 
 A step-by-step wizard:
   1. Build playlist via AI chat or paste a song list
