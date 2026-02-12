@@ -465,7 +465,7 @@ class YotoClient:
     def get_public_icons(self) -> list[dict]:
         """Fetch all public/shared display icons from Yoto."""
         resp = requests.get(
-            f"{API_BASE}/media/displayIcons/shared",
+            f"{API_BASE}/media/displayIcons/user/yoto",
             headers=self._headers(),
         )
         resp.raise_for_status()
