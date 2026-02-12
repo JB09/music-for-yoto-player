@@ -219,6 +219,20 @@ class YotoClient:
         resp.raise_for_status()
         return resp.json()["upload"]
 
+    @staticmethod
+    def _content_type_for(filepath: str) -> str:
+        """Return the MIME type for an audio file based on extension."""
+        ext = Path(filepath).suffix.lower()
+        return {
+            ".mp3": "audio/mpeg",
+            ".m4a": "audio/mp4",
+            ".aac": "audio/aac",
+            ".ogg": "audio/ogg",
+            ".wav": "audio/wav",
+            ".flac": "audio/flac",
+            ".opus": "audio/opus",
+        }.get(ext, "audio/mpeg")
+
     def upload_file(self, filepath: str) -> str:
         """Upload an audio file and return the uploadId."""
         sha256 = self._sha256_file(filepath)
@@ -228,12 +242,17 @@ class YotoClient:
 
         if upload_url:
             # File doesn't already exist on Yoto — upload it
+            filename = Path(filepath).name
+            content_type = self._content_type_for(filepath)
             with open(filepath, "rb") as f:
                 file_data = f.read()
             resp = requests.put(
                 upload_url,
                 data=file_data,
-                headers={"Content-Type": "audio/mpeg"},
+                headers={
+                    "Content-Type": content_type,
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
             )
             resp.raise_for_status()
 
@@ -253,10 +272,10 @@ class YotoClient:
                 headers=self._headers(),
             )
             resp.raise_for_status()
-            data = resp.json().get("data", {}).get("transcode", {})
+            transcode = resp.json().get("transcode", {})
 
-            if data.get("transcodedSha256"):
-                return data
+            if transcode.get("transcodedSha256"):
+                return transcode
 
             time.sleep(interval)
             elapsed = int((attempt + 1) * interval)
@@ -350,17 +369,18 @@ class YotoClient:
                         headers=self._headers(),
                     )
                     resp.raise_for_status()
-                    data = resp.json().get("data", {}).get("transcode", {})
+                    transcode = resp.json().get("transcode", {})
 
-                    if data.get("transcodedSha256"):
+                    if transcode.get("transcodedSha256"):
                         label = f"{song['title']} - {song['artist']}"
+                        info = transcode.get("transcodedInfo", {})
                         tracks.append({
                             "title": label,
-                            "transcodedSha256": data["transcodedSha256"],
-                            "duration": data.get("duration", 0),
-                            "fileSize": data.get("fileSize", 0),
-                            "channels": data.get("channels", "stereo"),
-                            "format": data.get("format", "aac"),
+                            "transcodedSha256": transcode["transcodedSha256"],
+                            "duration": info.get("duration", 0),
+                            "fileSize": info.get("fileSize", 0),
+                            "channels": info.get("channels", "stereo"),
+                            "format": info.get("format", "aac"),
                         })
                         done_ids.append(upload_id)
                         print(f"    Transcoded: {song['title']}", flush=True)
