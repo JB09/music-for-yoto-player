@@ -21,14 +21,27 @@
         {{ total }} songs downloaded successfully.
     </p>
 
-    <ol class="song-list">
+    <ol class="song-list" id="resultsList">
         {% for r in results %}
-        <li>
-            <span>
+        <li data-index="{{ loop.index0 }}" data-success="{{ 'true' if r.success else 'false' }}">
+            <span class="track-display" onclick="editTrack(this)">
                 <span class="song-title">{{ r.title }}</span>
                 <span class="song-artist"> — {{ r.artist }}</span>
+                {% if r.success %}
+                <span class="edit-hint text-muted" style="font-size: 0.7rem; margin-left: 0.5rem;">click to edit</span>
+                {% endif %}
             </span>
-            <span style="margin-left: auto;">
+            <span class="track-edit" style="display: none; flex: 1;">
+                <input type="text" class="edit-title" value="{{ r.title }}"
+                       placeholder="Song title" style="margin-bottom: 0.35rem;">
+                <input type="text" class="edit-artist" value="{{ r.artist }}"
+                       placeholder="Artist" style="margin-bottom: 0.35rem;">
+                <div style="display: flex; gap: 0.35rem;">
+                    <button onclick="saveTrack(this)" class="btn btn-primary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Save</button>
+                    <button onclick="cancelEdit(this)" class="btn btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Cancel</button>
+                </div>
+            </span>
+            <span style="margin-left: auto; flex-shrink: 0;">
                 {% if r.success %}
                     <span class="text-success">✓</span>
                 {% else %}
@@ -38,6 +51,9 @@
         </li>
         {% endfor %}
     </ol>
+    <p class="text-muted text-sm" style="margin-top: 0.5rem;">
+        Click a track to edit its title or artist. The file will be renamed on disk.
+    </p>
 </div>
 
 {% if yoto_available and success_count > 0 %}
@@ -184,6 +200,62 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+    .track-display { cursor: pointer; }
+    .track-display:hover .edit-hint { opacity: 1; }
+    .edit-hint { opacity: 0; transition: opacity 0.15s; }
+    .track-edit input[type="text"] { font-size: 0.85rem; padding: 0.35rem 0.5rem; }
+</style>
+<script>
+function editTrack(el) {
+    var li = el.closest('li');
+    if (li.dataset.success !== 'true') return;
+    li.querySelector('.track-display').style.display = 'none';
+    li.querySelector('.track-edit').style.display = '';
+}
+
+function cancelEdit(btn) {
+    var li = btn.closest('li');
+    li.querySelector('.track-edit').style.display = 'none';
+    li.querySelector('.track-display').style.display = '';
+}
+
+function saveTrack(btn) {
+    var li = btn.closest('li');
+    var idx = parseInt(li.dataset.index, 10);
+    var newTitle = li.querySelector('.edit-title').value.trim();
+    var newArtist = li.querySelector('.edit-artist').value.trim();
+    if (!newTitle || !newArtist) { alert('Title and artist are required.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    fetch('/track/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: idx, title: newTitle, artist: newArtist })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+        if (data.error) {
+            alert('Error: ' + data.error);
+            return;
+        }
+        // Update display text
+        li.querySelector('.song-title').textContent = newTitle;
+        li.querySelector('.song-artist').textContent = ' — ' + newArtist;
+        li.querySelector('.track-edit').style.display = 'none';
+        li.querySelector('.track-display').style.display = '';
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+        alert('Failed: ' + err.message);
+    });
+}
+</script>
 {% if yoto_available and success_count > 0 and yoto_authenticated %}
 <script>
 var newSongsCount = {{ success_count }};

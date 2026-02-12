@@ -16,19 +16,27 @@
 {% block content %}
 <div class="card">
     <h2>Review Your Playlist</h2>
-    <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-        {{ songs|length }} song{{ 's' if songs|length != 1 else '' }}
-        (shuffled, max {{ max_songs }}). Ready to find on YouTube?
+    <p class="text-muted text-sm" style="margin-bottom: 0.5rem;">
+        <span id="songCount">{{ songs|length }}</span> song{{ 's' if songs|length != 1 else '' }}
+        {% if input_mode == 'text' %}
+        (shuffled). Drag to reorder, click × to remove.
+        {% else %}
+        (shuffled, max {{ max_songs }}). Drag to reorder, click × to remove.
+        {% endif %}
     </p>
 
-    <ol class="song-list">
+    <ol class="song-list" id="songList">
         {% for song in songs %}
-        <li><span class="song-title">{{ song }}</span></li>
+        <li draggable="true" data-index="{{ loop.index0 }}">
+            <span class="drag-handle" title="Drag to reorder">☰</span>
+            <span class="song-title">{{ song }}</span>
+            <button class="delete-btn" title="Remove" onclick="removeSong(this)">×</button>
+        </li>
         {% endfor %}
     </ol>
 
     <div class="flex gap-sm mt-2">
-        <form action="/review" method="post" style="flex: 1;">
+        <form action="/review" method="post" style="flex: 1;" id="proceedForm">
             <button type="submit" class="btn btn-success btn-block">
                 Find on YouTube →
             </button>
@@ -41,4 +49,139 @@
 <div class="text-center mt-1">
     <a href="/" class="text-muted text-sm">← Start over</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    #songList li {
+        position: relative;
+        transition: background 0.15s;
+        user-select: none;
+        padding-right: 2.5rem;
+    }
+    #songList li.dragging {
+        opacity: 0.4;
+        background: #334155;
+    }
+    #songList li.drag-over {
+        border-top: 2px solid #38bdf8;
+    }
+    .drag-handle {
+        cursor: grab;
+        color: #475569;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .delete-btn {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #64748b;
+        font-size: 1.25rem;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        line-height: 1;
+        border-radius: 4px;
+    }
+    .delete-btn:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+</style>
+<script>
+var list = document.getElementById('songList');
+var dragSrcEl = null;
+
+function getItems() {
+    return Array.from(list.querySelectorAll('li'));
+}
+
+function getSongTexts() {
+    return getItems().map(function(li) {
+        return li.querySelector('.song-title').textContent;
+    });
+}
+
+function updateNumbers() {
+    getItems().forEach(function(li, i) {
+        li.setAttribute('data-index', i);
+    });
+    document.getElementById('songCount').textContent = getItems().length;
+}
+
+function saveOrder() {
+    var songs = getSongTexts();
+    fetch('/review/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songs: songs })
+    });
+}
+
+function removeSong(btn) {
+    var li = btn.closest('li');
+    li.remove();
+    updateNumbers();
+    saveOrder();
+}
+
+// Drag and drop
+list.addEventListener('dragstart', function(e) {
+    dragSrcEl = e.target.closest('li');
+    if (!dragSrcEl) return;
+    dragSrcEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+});
+
+list.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var target = e.target.closest('li');
+    if (!target || target === dragSrcEl) return;
+
+    // Remove drag-over from all
+    getItems().forEach(function(li) { li.classList.remove('drag-over'); });
+    target.classList.add('drag-over');
+});
+
+list.addEventListener('dragleave', function(e) {
+    var target = e.target.closest('li');
+    if (target) target.classList.remove('drag-over');
+});
+
+list.addEventListener('drop', function(e) {
+    e.preventDefault();
+    var target = e.target.closest('li');
+    if (!target || target === dragSrcEl) return;
+
+    // Insert dragged element before or after target
+    var items = getItems();
+    var dragIdx = items.indexOf(dragSrcEl);
+    var targetIdx = items.indexOf(target);
+
+    if (dragIdx < targetIdx) {
+        list.insertBefore(dragSrcEl, target.nextSibling);
+    } else {
+        list.insertBefore(dragSrcEl, target);
+    }
+
+    updateNumbers();
+    saveOrder();
+});
+
+list.addEventListener('dragend', function() {
+    getItems().forEach(function(li) {
+        li.classList.remove('dragging');
+        li.classList.remove('drag-over');
+    });
+    dragSrcEl = null;
+});
+
+// Save order before proceeding
+document.getElementById('proceedForm').addEventListener('submit', function() {
+    saveOrder();
+});
+</script>
 {% endblock %}

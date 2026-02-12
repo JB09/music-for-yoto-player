@@ -278,6 +278,7 @@ def chat_accept():
         return redirect(url_for("chat_page"))
     song_strings = [f"{s['title']} - {s['artist']}" for s in songs]
     session["raw_songs"] = song_strings
+    session["input_mode"] = "chat"
     return redirect(url_for("review"))
 
 
@@ -294,6 +295,7 @@ def text_input():
         ]
         if songs:
             session["raw_songs"] = songs
+            session["input_mode"] = "text"
             return redirect(url_for("review"))
     return render_template("text_input.html")
 
@@ -313,14 +315,29 @@ def review():
     if not songs:
         return redirect(url_for("index"))
 
+    # Determine cap based on input mode: paste allows up to 100, chat caps at 12
+    input_mode = session.get("input_mode", "chat")
+    cap = MAX_TRACKS_PER_CARD if input_mode == "text" else MAX_SONGS
+
     # Shuffle and cap
     if "shuffled" not in session:
         random.shuffle(songs)
-        songs = songs[:MAX_SONGS]
+        songs = songs[:cap]
         session["raw_songs"] = songs
         session["shuffled"] = True
 
-    return render_template("review.html", songs=songs, max_songs=MAX_SONGS)
+    return render_template("review.html", songs=songs, max_songs=cap,
+                           input_mode=input_mode)
+
+
+@app.route("/review/reorder", methods=["POST"])
+def review_reorder():
+    """Accept a reordered (and possibly reduced) song list from the review page."""
+    data = request.get_json(silent=True)
+    if data and "songs" in data:
+        cap = MAX_TRACKS_PER_CARD if session.get("input_mode") == "text" else MAX_SONGS
+        session["raw_songs"] = data["songs"][:cap]
+    return jsonify({"ok": True})
 
 
 @app.route("/review/reshuffle", methods=["POST"])
@@ -435,6 +452,49 @@ def download_results():
         yoto_available=yoto_available,
         yoto_authenticated=yoto_authenticated,
     )
+
+
+# ── Track rename ───────────────────────────────────────────────────
+
+
+@app.route("/track/rename", methods=["POST"])
+def track_rename():
+    """Rename a downloaded track's artist/title and update the file on disk."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "No data"}), 400
+
+    idx = data.get("index")
+    new_title = data.get("title", "").strip()
+    new_artist = data.get("artist", "").strip()
+
+    results = session.get("download_results", [])
+    if idx is None or idx < 0 or idx >= len(results):
+        return jsonify({"error": "Invalid index"}), 400
+
+    track = results[idx]
+    if not track.get("success") or not track.get("filepath"):
+        return jsonify({"error": "Track has no file"}), 400
+
+    if not new_title or not new_artist:
+        return jsonify({"error": "Title and artist are required"}), 400
+
+    old_path = track["filepath"]
+    new_safe = f"{new_artist} - {new_title}".replace("/", "-").replace("\\", "-")
+    new_path = os.path.join(OUTPUT_DIR, f"{new_safe}.mp3")
+
+    # Rename the file if path changed and old file exists
+    if old_path != new_path and os.path.exists(old_path):
+        try:
+            os.rename(old_path, new_path)
+        except OSError as e:
+            return jsonify({"error": f"Rename failed: {e}"}), 500
+
+    track["title"] = new_title
+    track["artist"] = new_artist
+    track["filepath"] = new_path
+    session["download_results"] = results
+    return jsonify({"ok": True, "filepath": new_path})
 
 
 # ── Yoto Authentication (Authorization Code flow) ──────────────────
