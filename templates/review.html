@@ -25,6 +25,14 @@
         {% endif %}
     </p>
 
+    <div style="margin-bottom: 0.75rem;">
+        <form action="/review/reshuffle" method="post" style="display: inline;">
+            <button type="submit" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                Reshuffle
+            </button>
+        </form>
+    </div>
+
     <ol class="song-list" id="songList">
         {% for song in songs %}
         <li draggable="true" data-index="{{ loop.index0 }}">
@@ -37,14 +45,11 @@
         {% endfor %}
     </ol>
 
-    <div class="flex gap-sm mt-2">
-        <form action="/review" method="post" style="flex: 1;" id="proceedForm">
+    <div class="mt-2">
+        <form action="/review" method="post" id="proceedForm">
             <button type="submit" class="btn btn-success btn-block">
                 Find on YouTube →
             </button>
-        </form>
-        <form action="/review/reshuffle" method="post">
-            <button type="submit" class="btn btn-secondary">Reshuffle</button>
         </form>
     </div>
 </div>
