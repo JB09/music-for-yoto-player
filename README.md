@@ -94,7 +94,8 @@ Open **http://localhost:5000**. The wizard walks you through:
 1. **Build** — AI chat or paste a song list
 2. **Review** — see the shuffled/capped playlist, reshuffle if needed
 3. **Match** — confirm the YouTube match for each song (one at a time)
-4. **Download** — downloads all MP3s, then optionally upload to Yoto
+4. **Download** — downloads all MP3s
+5. **Yoto** _(optional)_ — upload to Yoto and create a MYO card
 
 ---
 
