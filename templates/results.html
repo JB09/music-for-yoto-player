@@ -26,12 +26,9 @@
         <li draggable="true" data-index="{{ loop.index0 }}" data-success="{{ 'true' if r.success else 'false' }}">
             <span class="drag-handle" title="Drag to reorder">☰</span>
             <span class="track-info" style="flex: 1; min-width: 0;">
-                <span class="track-display" onclick="editTrack(this)">
+                <span class="track-display">
                     <span class="song-title">{{ r.title }}</span>
                     <span class="song-artist"> — {{ r.artist }}</span>
-                    {% if r.success %}
-                    <span class="edit-hint text-muted" style="font-size: 0.7rem; margin-left: 0.5rem;">edit</span>
-                    {% endif %}
                 </span>
                 <span class="track-edit" style="display: none;">
                     <input type="text" class="edit-title" value="{{ r.title }}"
@@ -50,6 +47,9 @@
                 {% else %}
                     <span class="text-danger">Failed</span>
                 {% endif %}
+                {% if r.success %}
+                <button class="action-btn edit-btn" title="Edit title/artist" onclick="editTrack(this)">✎</button>
+                {% endif %}
                 <button class="action-btn rematch-btn" title="Re-match on YouTube" onclick="rematchTrack(this)">↻</button>
                 <button class="action-btn delete-btn" title="Remove" onclick="deleteTrack(this)">×</button>
             </span>
@@ -57,7 +57,7 @@
         {% endfor %}
     </ol>
     <p class="text-muted text-sm" style="margin-top: 0.5rem;">
-        Drag to reorder. Click a track name to edit. ↻ to re-match on YouTube. × to remove.
+        Drag to reorder. ✎ edit name · ↻ re-match · × remove.
     </p>
 </div>
 
@@ -206,9 +206,6 @@
 
 {% block scripts %}
 <style>
-    .track-display { cursor: pointer; }
-    .track-display:hover .edit-hint { opacity: 1; }
-    .edit-hint { opacity: 0; transition: opacity 0.15s; }
     .track-edit input[type="text"] { font-size: 0.85rem; padding: 0.35rem 0.5rem; }
     #resultsList li {
         position: relative;
@@ -234,14 +231,14 @@
         line-height: 1;
         border-radius: 4px;
     }
+    .edit-btn:hover { color: #a78bfa; background: rgba(167,139,250,0.1); }
     .delete-btn:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
     .rematch-btn:hover { color: #38bdf8; background: rgba(56,189,248,0.1); }
 </style>
 <script>
 // ── Edit track name ──
-function editTrack(el) {
-    var li = el.closest('li');
-    if (li.dataset.success !== 'true') return;
+function editTrack(btn) {
+    var li = btn.closest('li');
     li.querySelector('.track-display').style.display = 'none';
     li.querySelector('.track-edit').style.display = '';
 }
