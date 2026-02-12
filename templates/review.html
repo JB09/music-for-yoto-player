@@ -29,8 +29,10 @@
         {% for song in songs %}
         <li draggable="true" data-index="{{ loop.index0 }}">
             <span class="drag-handle" title="Drag to reorder">☰</span>
-            <span class="song-title">{{ song }}</span>
-            <button class="delete-btn" title="Remove" onclick="removeSong(this)">×</button>
+            <span class="song-title" style="flex: 1; min-width: 0;">{{ song }}</span>
+            <span class="track-actions" style="margin-left: auto; flex-shrink: 0;">
+                <button class="action-btn delete-btn" title="Remove" onclick="removeSong(this)">×</button>
+            </span>
         </li>
         {% endfor %}
     </ol>
@@ -54,10 +56,8 @@
 {% block scripts %}
 <style>
     #songList li {
-        position: relative;
         transition: background 0.15s;
         user-select: none;
-        padding-right: 2.5rem;
     }
     #songList li.dragging {
         opacity: 0.4;
@@ -73,17 +73,13 @@
         flex-shrink: 0;
     }
     .drag-handle:active { cursor: grabbing; }
-    .delete-btn {
-        position: absolute;
-        right: 0;
-        top: 50%;
-        transform: translateY(-50%);
+    .action-btn {
         background: none;
         border: none;
         color: #64748b;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         cursor: pointer;
-        padding: 0.25rem 0.5rem;
+        padding: 0.15rem 0.35rem;
         line-height: 1;
         border-radius: 4px;
     }
