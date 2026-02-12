@@ -87,6 +87,43 @@
         </div>
         <input type="text" id="cardName" placeholder="Playlist name (e.g. Bedtime Songs)"
                style="margin-bottom: 0.75rem;">
+        <div id="coverWrapper" style="margin-bottom: 0.75rem;">
+            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
+                Cover Image <span style="opacity: 0.5;">(optional)</span>
+            </label>
+            <div id="coverUploadArea" style="border: 1px dashed #334155; border-radius: 8px;
+                    padding: 1rem; text-align: center; cursor: pointer; background: #0f172a;"
+                 onclick="document.getElementById('coverFileInput').click()">
+                <input type="file" id="coverFileInput" accept="image/jpeg,image/png"
+                       onchange="onCoverSelected(this)" style="display: none;">
+                <p class="text-muted text-sm" id="coverPlaceholder">
+                    Click to upload a cover image
+                </p>
+                <p class="text-muted" style="font-size: 0.7rem; margin-top: 0.25rem; opacity: 0.6;">
+                    JPEG or PNG. 2″ × 3.5″ ratio (e.g. 600×1050px). Yoto will auto-resize.
+                </p>
+            </div>
+            <div id="coverUploading" style="display: none;" class="text-center">
+                <div class="spinner"></div>
+                <p class="text-muted text-sm mt-1">Uploading cover...</p>
+            </div>
+            <div id="coverConfirmed" style="display: none; margin-top: 0.5rem;
+                    padding: 0.5rem 0.75rem; border: 1px solid #22c55e; border-radius: 8px;
+                    background: #0f2a1a;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <img id="coverConfirmedImg" src="" alt="Cover"
+                         style="max-width: 48px; max-height: 48px; border-radius: 4px;">
+                    <div style="flex: 1;">
+                        <p class="text-success text-sm" style="font-weight: 500;">Cover set</p>
+                        <button onclick="removeCover()" class="text-sm"
+                                style="color: #94a3b8; background: none; border: none;
+                                       cursor: pointer; text-decoration: underline; padding: 0;">
+                            Change
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div id="iconModeWrapper" style="margin-bottom: 0.75rem;">
             <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
                 Card Icon
@@ -170,43 +207,6 @@
                     class="btn btn-secondary btn-block" style="margin-top: 0.5rem;">
                 Preview Icon
             </button>
-        </div>
-        <div id="coverWrapper" style="margin-bottom: 0.75rem;">
-            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
-                Cover Image <span style="opacity: 0.5;">(optional)</span>
-            </label>
-            <div id="coverUploadArea" style="border: 1px dashed #334155; border-radius: 8px;
-                    padding: 1rem; text-align: center; cursor: pointer; background: #0f172a;"
-                 onclick="document.getElementById('coverFileInput').click()">
-                <input type="file" id="coverFileInput" accept="image/jpeg,image/png"
-                       onchange="onCoverSelected(this)" style="display: none;">
-                <p class="text-muted text-sm" id="coverPlaceholder">
-                    Click to upload a cover image
-                </p>
-                <p class="text-muted" style="font-size: 0.7rem; margin-top: 0.25rem; opacity: 0.6;">
-                    JPEG or PNG. 2″ × 3.5″ ratio (e.g. 600×1050px). Yoto will auto-resize.
-                </p>
-            </div>
-            <div id="coverUploading" style="display: none;" class="text-center">
-                <div class="spinner"></div>
-                <p class="text-muted text-sm mt-1">Uploading cover...</p>
-            </div>
-            <div id="coverConfirmed" style="display: none; margin-top: 0.5rem;
-                    padding: 0.5rem 0.75rem; border: 1px solid #22c55e; border-radius: 8px;
-                    background: #0f2a1a;">
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <img id="coverConfirmedImg" src="" alt="Cover"
-                         style="max-width: 48px; max-height: 48px; border-radius: 4px;">
-                    <div style="flex: 1;">
-                        <p class="text-success text-sm" style="font-weight: 500;">Cover set</p>
-                        <button onclick="removeCover()" class="text-sm"
-                                style="color: #94a3b8; background: none; border: none;
-                                       cursor: pointer; text-decoration: underline; padding: 0;">
-                            Change
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
         <button id="uploadBtn" onclick="uploadToYoto()" class="btn btn-primary btn-block">
             Upload to Yoto &amp; Create MYO Card
