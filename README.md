@@ -112,7 +112,7 @@ The sidecar uses two named Docker volumes (both persist across container restart
 | `ytdlp-data` | `/app/downloads` | Temporary storage for downloaded audio inside the sidecar |
 | `ytdlp-keys` | `/app/jsons` | Auth cookies / key data used by yt-dlp (persists across restarts so you don't need to re-authenticate) |
 
-Your final MP3 files end up in `./downloads/` on the host (bind-mounted into the main app container). The sidecar's volumes are internal — you don't need to access them directly.
+The sidecar automatically cleans up completed downloads after a configurable timeout (default: 10 minutes) via its `CLEANUP_TIME_MINUTES` setting — so the `ytdlp-data` volume does not grow indefinitely. Your final MP3 files end up in `./downloads/` on the host (bind-mounted into the main app container). The sidecar's volumes are internal — you don't need to access them directly.
 
 **Local fallback (without sidecar):**
 
