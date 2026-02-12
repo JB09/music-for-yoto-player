@@ -282,7 +282,7 @@ class YotoClient:
         songs: list[dict],
         on_progress=None,
         cancel_check=None,
-        max_transcode_time: int = 1200,
+        max_transcode_time: int = 1800,
     ) -> tuple[list[dict], list[str]]:
         """Upload all files first, then poll all transcodes in parallel.
 
@@ -293,7 +293,7 @@ class YotoClient:
             songs: list of dicts with 'filepath', 'title', 'artist' keys.
             on_progress: optional callback(phase, current, total, title) for UI updates.
             cancel_check: optional callable returning True if user cancelled.
-            max_transcode_time: max seconds to wait for all transcoding (default 20min).
+            max_transcode_time: max seconds to wait for all transcoding (default 30min).
 
         Returns:
             (tracks, errors) — tracks is a list of transcode result dicts,
@@ -327,15 +327,18 @@ class YotoClient:
         print(f"    Waiting for {len(upload_ids)} track(s) to transcode...", flush=True)
 
         pending = {uid: song for uid, song in upload_ids}
-        interval = 5.0
+        poll_interval = 5.0
         elapsed = 0.0
 
         while pending and elapsed < max_transcode_time:
-            if cancel_check and cancel_check():
-                break
-
-            time.sleep(interval)
-            elapsed += interval
+            # Sleep in short increments so cancel is responsive
+            for _ in range(int(poll_interval)):
+                if cancel_check and cancel_check():
+                    # Immediately return whatever tracks are already done
+                    print(f"    Cancelled — returning {len(tracks)} completed track(s).", flush=True)
+                    return tracks, errors
+                time.sleep(1.0)
+            elapsed += poll_interval
 
             # Check all pending transcodes
             done_ids = []
