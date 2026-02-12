@@ -16,12 +16,19 @@
 {% block content %}
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        {% if is_rematch %}
+        <h2 style="margin: 0;">Re-match Track</h2>
+        <a href="/download/results" class="text-muted text-sm">Cancel &amp; go back</a>
+        {% else %}
         <h2 style="margin: 0;">Song {{ current }} of {{ total }}</h2>
         <span class="text-muted text-sm">{{ confirmed_count }} confirmed</span>
+        {% endif %}
     </div>
+    {% if not is_rematch %}
     <div class="progress-bar">
         <div class="progress-fill" style="width: {{ (current / total * 100)|int }}%"></div>
     </div>
+    {% endif %}
 
     <p style="margin: 1rem 0; font-size: 1rem;">
         Searching: <strong>"{{ query }}"</strong>
@@ -38,7 +45,7 @@
         </form>
         <form action="/match" method="post">
             <input type="hidden" name="action" value="skip">
-            <button type="submit" class="btn btn-danger">Skip</button>
+            <button type="submit" class="btn btn-danger">{{ 'Cancel' if is_rematch else 'Skip' }}</button>
         </form>
     </div>
 

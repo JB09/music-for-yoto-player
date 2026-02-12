@@ -23,36 +23,41 @@
 
     <ol class="song-list" id="resultsList">
         {% for r in results %}
-        <li data-index="{{ loop.index0 }}" data-success="{{ 'true' if r.success else 'false' }}">
-            <span class="track-display" onclick="editTrack(this)">
-                <span class="song-title">{{ r.title }}</span>
-                <span class="song-artist"> — {{ r.artist }}</span>
-                {% if r.success %}
-                <span class="edit-hint text-muted" style="font-size: 0.7rem; margin-left: 0.5rem;">click to edit</span>
-                {% endif %}
+        <li draggable="true" data-index="{{ loop.index0 }}" data-success="{{ 'true' if r.success else 'false' }}">
+            <span class="drag-handle" title="Drag to reorder">☰</span>
+            <span class="track-info" style="flex: 1; min-width: 0;">
+                <span class="track-display" onclick="editTrack(this)">
+                    <span class="song-title">{{ r.title }}</span>
+                    <span class="song-artist"> — {{ r.artist }}</span>
+                    {% if r.success %}
+                    <span class="edit-hint text-muted" style="font-size: 0.7rem; margin-left: 0.5rem;">edit</span>
+                    {% endif %}
+                </span>
+                <span class="track-edit" style="display: none;">
+                    <input type="text" class="edit-title" value="{{ r.title }}"
+                           placeholder="Song title" style="margin-bottom: 0.35rem;">
+                    <input type="text" class="edit-artist" value="{{ r.artist }}"
+                           placeholder="Artist" style="margin-bottom: 0.35rem;">
+                    <div style="display: flex; gap: 0.35rem;">
+                        <button onclick="saveTrack(this)" class="btn btn-primary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Save</button>
+                        <button onclick="cancelEdit(this)" class="btn btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Cancel</button>
+                    </div>
+                </span>
             </span>
-            <span class="track-edit" style="display: none; flex: 1;">
-                <input type="text" class="edit-title" value="{{ r.title }}"
-                       placeholder="Song title" style="margin-bottom: 0.35rem;">
-                <input type="text" class="edit-artist" value="{{ r.artist }}"
-                       placeholder="Artist" style="margin-bottom: 0.35rem;">
-                <div style="display: flex; gap: 0.35rem;">
-                    <button onclick="saveTrack(this)" class="btn btn-primary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Save</button>
-                    <button onclick="cancelEdit(this)" class="btn btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Cancel</button>
-                </div>
-            </span>
-            <span style="margin-left: auto; flex-shrink: 0;">
+            <span class="track-actions" style="margin-left: auto; flex-shrink: 0; display: flex; align-items: center; gap: 0.35rem;">
                 {% if r.success %}
                     <span class="text-success">✓</span>
                 {% else %}
                     <span class="text-danger">Failed</span>
                 {% endif %}
+                <button class="action-btn rematch-btn" title="Re-match on YouTube" onclick="rematchTrack(this)">↻</button>
+                <button class="action-btn delete-btn" title="Remove" onclick="deleteTrack(this)">×</button>
             </span>
         </li>
         {% endfor %}
     </ol>
     <p class="text-muted text-sm" style="margin-top: 0.5rem;">
-        Click a track to edit its title or artist. The file will be renamed on disk.
+        Drag to reorder. Click a track name to edit. ↻ to re-match on YouTube. × to remove.
     </p>
 </div>
 
@@ -205,8 +210,35 @@
     .track-display:hover .edit-hint { opacity: 1; }
     .edit-hint { opacity: 0; transition: opacity 0.15s; }
     .track-edit input[type="text"] { font-size: 0.85rem; padding: 0.35rem 0.5rem; }
+    #resultsList li {
+        position: relative;
+        transition: background 0.15s;
+        user-select: none;
+    }
+    #resultsList li.dragging { opacity: 0.4; background: #334155; }
+    #resultsList li.drag-over { border-top: 2px solid #38bdf8; }
+    .drag-handle {
+        cursor: grab;
+        color: #475569;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .action-btn {
+        background: none;
+        border: none;
+        color: #64748b;
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 0.15rem 0.35rem;
+        line-height: 1;
+        border-radius: 4px;
+    }
+    .delete-btn:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+    .rematch-btn:hover { color: #38bdf8; background: rgba(56,189,248,0.1); }
 </style>
 <script>
+// ── Edit track name ──
 function editTrack(el) {
     var li = el.closest('li');
     if (li.dataset.success !== 'true') return;
@@ -243,9 +275,10 @@ function saveTrack(btn) {
             alert('Error: ' + data.error);
             return;
         }
-        // Update display text
         li.querySelector('.song-title').textContent = newTitle;
         li.querySelector('.song-artist').textContent = ' — ' + newArtist;
+        li.querySelector('.edit-title').value = newTitle;
+        li.querySelector('.edit-artist').value = newArtist;
         li.querySelector('.track-edit').style.display = 'none';
         li.querySelector('.track-display').style.display = '';
     })
@@ -255,6 +288,126 @@ function saveTrack(btn) {
         alert('Failed: ' + err.message);
     });
 }
+
+// ── Delete track ──
+function deleteTrack(btn) {
+    var li = btn.closest('li');
+    var idx = parseInt(li.dataset.index, 10);
+
+    fetch('/track/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: idx })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        li.remove();
+        reindexItems();
+        updateSuccessCount(data.count);
+    })
+    .catch(function(err) { alert('Failed: ' + err.message); });
+}
+
+// ── Re-match track ──
+function rematchTrack(btn) {
+    var li = btn.closest('li');
+    var idx = parseInt(li.dataset.index, 10);
+
+    fetch('/track/rematch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: idx })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        window.location.href = data.redirect;
+    })
+    .catch(function(err) { alert('Failed: ' + err.message); });
+}
+
+// ── Drag and drop reorder ──
+var resultsList = document.getElementById('resultsList');
+var dragSrcEl = null;
+
+function getResultItems() {
+    return Array.from(resultsList.querySelectorAll('li'));
+}
+
+function reindexItems() {
+    getResultItems().forEach(function(li, i) {
+        li.setAttribute('data-index', i);
+    });
+}
+
+function updateSuccessCount(count) {
+    var el = document.querySelector('#resultsList').closest('.card').querySelector('.text-success');
+    if (el) el.textContent = count;
+    // Update newSongsCount if it exists (for Yoto capacity checks)
+    if (typeof newSongsCount !== 'undefined') newSongsCount = count;
+}
+
+function saveResultOrder() {
+    var order = getResultItems().map(function(li) {
+        return parseInt(li.dataset.index, 10);
+    });
+    fetch('/track/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: order })
+    }).then(function() {
+        // Re-index after server confirms
+        reindexItems();
+    });
+}
+
+resultsList.addEventListener('dragstart', function(e) {
+    dragSrcEl = e.target.closest('li');
+    if (!dragSrcEl) return;
+    dragSrcEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+});
+
+resultsList.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var target = e.target.closest('li');
+    if (!target || target === dragSrcEl) return;
+    getResultItems().forEach(function(li) { li.classList.remove('drag-over'); });
+    target.classList.add('drag-over');
+});
+
+resultsList.addEventListener('dragleave', function(e) {
+    var target = e.target.closest('li');
+    if (target) target.classList.remove('drag-over');
+});
+
+resultsList.addEventListener('drop', function(e) {
+    e.preventDefault();
+    var target = e.target.closest('li');
+    if (!target || target === dragSrcEl) return;
+
+    var items = getResultItems();
+    var dragIdx = items.indexOf(dragSrcEl);
+    var targetIdx = items.indexOf(target);
+
+    if (dragIdx < targetIdx) {
+        resultsList.insertBefore(dragSrcEl, target.nextSibling);
+    } else {
+        resultsList.insertBefore(dragSrcEl, target);
+    }
+    saveResultOrder();
+});
+
+resultsList.addEventListener('dragend', function() {
+    getResultItems().forEach(function(li) {
+        li.classList.remove('dragging');
+        li.classList.remove('drag-over');
+    });
+    dragSrcEl = null;
+});
 </script>
 {% if yoto_available and success_count > 0 and yoto_authenticated %}
 <script>

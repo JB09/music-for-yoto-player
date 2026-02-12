@@ -349,13 +349,26 @@ def reshuffle():
 # ── YouTube matching (one song at a time) ───────────────────────────
 
 
+def _finish_rematch():
+    """Restore session state after a rematch and redirect to results."""
+    session["raw_songs"] = session.pop("_saved_raw_songs", [])
+    session["match_index"] = session.pop("_saved_match_index", 0)
+    session["confirmed_songs"] = session.pop("_saved_confirmed_songs", [])
+    session.pop("rematch_query", None)
+    session.pop("rematch_index", None)
+    return redirect(url_for("download_results"))
+
+
 @app.route("/match", methods=["GET", "POST"])
 def match_song():
     songs = session.get("raw_songs", [])
     idx = session.get("match_index", 0)
     confirmed = session.get("confirmed_songs", [])
+    is_rematch = "rematch_index" in session
 
     if idx >= len(songs):
+        if is_rematch:
+            return _finish_rematch()
         return redirect(url_for("download_page"))
 
     query = request.args.get("q", songs[idx])
@@ -365,12 +378,34 @@ def match_song():
 
         if action == "select":
             selected = json.loads(request.form.get("song_data", "{}"))
+
+            if is_rematch:
+                # Download immediately and update the results entry
+                force = selected.get("force_download", False)
+                filepath = download_audio(
+                    selected["videoId"], selected["title"], selected["artist"],
+                    force=force,
+                )
+                rematch_idx = session["rematch_index"]
+                results = session.get("download_results", [])
+                if 0 <= rematch_idx < len(results):
+                    results[rematch_idx] = {
+                        "title": selected["title"],
+                        "artist": selected["artist"],
+                        "success": filepath is not None,
+                        "filepath": filepath or "",
+                    }
+                    session["download_results"] = results
+                return _finish_rematch()
+
             confirmed.append(selected)
             session["confirmed_songs"] = confirmed
             session["match_index"] = idx + 1
             return redirect(url_for("match_song"))
 
         elif action == "skip":
+            if is_rematch:
+                return _finish_rematch()
             session["match_index"] = idx + 1
             return redirect(url_for("match_song"))
 
@@ -396,6 +431,7 @@ def match_song():
         current=idx + 1,
         total=len(songs),
         confirmed_count=len(confirmed),
+        is_rematch=is_rematch,
     )
 
 
@@ -447,7 +483,7 @@ def download_results():
     return render_template(
         "results.html",
         results=results,
-        total=len(confirmed),
+        total=len(results),
         success_count=sum(1 for r in results if r["success"]),
         yoto_available=yoto_available,
         yoto_authenticated=yoto_authenticated,
@@ -495,6 +531,72 @@ def track_rename():
     track["filepath"] = new_path
     session["download_results"] = results
     return jsonify({"ok": True, "filepath": new_path})
+
+
+@app.route("/track/reorder", methods=["POST"])
+def track_reorder():
+    """Accept a reordered list of track indices for the results page."""
+    data = request.get_json(silent=True)
+    if not data or "order" not in data:
+        return jsonify({"error": "No data"}), 400
+
+    results = session.get("download_results", [])
+    order = data["order"]  # list of original indices
+
+    # Validate and reorder
+    if sorted(order) != list(range(len(results))):
+        return jsonify({"error": "Invalid order"}), 400
+
+    session["download_results"] = [results[i] for i in order]
+    return jsonify({"ok": True})
+
+
+@app.route("/track/delete", methods=["POST"])
+def track_delete():
+    """Remove a track from the results list (does not delete the file)."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "No data"}), 400
+
+    idx = data.get("index")
+    results = session.get("download_results", [])
+    if idx is None or idx < 0 or idx >= len(results):
+        return jsonify({"error": "Invalid index"}), 400
+
+    results.pop(idx)
+    session["download_results"] = results
+    return jsonify({"ok": True, "count": sum(1 for r in results if r["success"])})
+
+
+@app.route("/track/rematch", methods=["POST"])
+def track_rematch():
+    """Set up re-match mode for a single track, then redirect to /match."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "No data"}), 400
+
+    idx = data.get("index")
+    results = session.get("download_results", [])
+    if idx is None or idx < 0 or idx >= len(results):
+        return jsonify({"error": "Invalid index"}), 400
+
+    track = results[idx]
+    query = f"{track['title']} - {track['artist']}"
+
+    # Save rematch state
+    session["rematch_index"] = idx
+    session["rematch_query"] = query
+
+    # Set up the match machinery for one song
+    session["_saved_raw_songs"] = session.get("raw_songs", [])
+    session["_saved_match_index"] = session.get("match_index", 0)
+    session["_saved_confirmed_songs"] = session.get("confirmed_songs", [])
+
+    session["raw_songs"] = [query]
+    session["match_index"] = 0
+    session["confirmed_songs"] = []
+
+    return jsonify({"ok": True, "redirect": url_for("match_song")})
 
 
 # ── Yoto Authentication (Authorization Code flow) ──────────────────
