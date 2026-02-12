@@ -97,17 +97,6 @@ docker compose --profile youtube up --build
 
 Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points elsewhere or local yt-dlp is installed).
 
-**Local fallback (without sidecar):**
-
-If `DOWNLOAD_SERVICE_URL` is not set, the YouTube provider falls back to using the yt-dlp Python library directly. This requires:
-
-```bash
-pip install yt-dlp
-# Plus ffmpeg on your PATH for MP3 conversion
-```
-
-This fallback is intended for local development. In Docker, ffmpeg is pre-installed in the image so the fallback works, but the sidecar approach is recommended.
-
 ### Plex Provider
 
 The Plex provider searches your own Plex Media Server music library and retrieves audio files directly — no external downloads involved.
@@ -131,50 +120,13 @@ The provider searches across track titles and artist names in your library. Audi
 
 **Note:** YouTube preview (play button on the match screen) is not available with the Plex provider since tracks are local files, not YouTube videos.
 
----
+## Note on the Physical Card Step
 
-## Setup (Without Docker)
+Everything is automated except the final step: linking the playlist to a physical MYO card. This requires either:
+- **NFC tap** via the Yoto mobile app (hold card to phone)
+- **Insert card** into a connected Yoto Player
 
-### Prerequisites (Windows)
-
-1. **Python 3.10+** — [python.org/downloads](https://www.python.org/downloads/)
-2. **FFmpeg** — Required for audio conversion
-   - `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
-
-### Install
-
-```bash
-git clone <repo-url>
-cd music-scraper-for-yoto-player
-
-python -m venv .venv
-.venv\Scripts\activate
-
-pip install -r requirements.txt
-```
-
-### Set API key (for AI Chat mode)
-
-```bash
-set ANTHROPIC_API_KEY=sk-ant-...
-```
-Get a key at [console.anthropic.com](https://console.anthropic.com/).
-
----
-
-## Web UI
-
-```bash
-python web_app.py
-```
-
-Open **http://localhost:5000**. The wizard walks you through:
-
-1. **Build** — AI chat or paste a song list
-2. **Review** — see the shuffled/capped playlist, reshuffle if needed
-3. **Match** — confirm the song match from your music provider (one at a time)
-4. **Download** — downloads all MP3s
-5. **Yoto** _(optional)_ — upload to Yoto and create a MYO card
+This is a hardware interaction that can't be automated via software.
 
 ---
 
@@ -184,26 +136,11 @@ See **[CLI.md](CLI.md)** for full CLI documentation, including all commands, opt
 
 ---
 
-## Shuffle & Song Limit
-
-By default, the song list is **randomized** and **capped at 12 songs**. This is designed for Yoto MYO cards where you typically want a manageable playlist for kids.
-
-- Override the cap: `--max-songs 8` or `--max-songs 20`
-- Disable shuffle: `--no-shuffle`
-- The final list is always shown for confirmation before downloading
-
 ## Setting Up Yoto API Access
 
 1. Go to [yoto.dev/get-started](https://yoto.dev/get-started/start-here/) and register for a developer account
 2. Obtain your **Client ID** from the Yoto Developers portal
 3. Pass it via `--yoto` flag (CLI) or `YOTO_CLIENT_ID` env var (Docker/Web)
-
-### Authentication
-
-Two OAuth2 flows are supported:
-
-- **CLI** — Uses the [Device Code flow](https://yoto.dev/authentication/auth/). On first run it opens a browser for login. No callback URL needed.
-- **Web UI** — Uses the [Authorization Code flow](https://yoto.dev/authentication/auth/). Click "Connect to Yoto" in the browser to log in. After authorization, Yoto redirects back to the app automatically.
 
 ### Callback URL Configuration (Web UI)
 
@@ -212,7 +149,6 @@ For the Web UI's OAuth flow to work, you must add a **callback URL** in the Yoto
 1. Go to your app settings at [yoto.dev](https://yoto.dev/)
 2. Find **Allowed Callback URLs**
 3. Add your app's callback URL:
-   - Local development: `http://localhost:5000/yoto/callback`
    - Docker: `http://localhost:5000/yoto/callback`
    - Reverse proxy / custom domain: `https://yourdomain.com/yoto/callback`
 4. Multiple URLs can be comma-separated (e.g. for different environments)
@@ -227,30 +163,7 @@ If the app runs behind a reverse proxy (e.g. `https://yoto.example.com`), the au
 YOTO_REDIRECT_URI=https://yoto.example.com
 ```
 
-Then add `https://yoto.example.com/yoto/callback` to the **Allowed Callback URLs** in the Yoto Developer portal.
-
 Tokens are saved to `~/.yoto-scraper-tokens.json` and reused across sessions.
-
-## How It Works
-
-```
-AI Chat  OR  Paste songs  OR  songs.txt
-                │
-                ▼
-  [Shuffle & Cap] → randomize, limit to 12 songs → confirm list
-                │
-                ▼
-  [Phase 1] Search music provider → show top 5 results → you confirm each
-                │
-                ▼
-  [Phase 2] Retrieve audio as MP3 (via sidecar, Plex, or local yt-dlp)
-                │
-                ▼
-  [Phase 3] Upload MP3s to Yoto API → create MYO card playlist
-                │
-                ▼
-  Open Yoto app → link playlist to physical MYO card (NFC tap or insert)
-```
 
 ## Card Icons
 
@@ -267,16 +180,6 @@ Icon requirements (per [Yoto Developer docs](https://yoto.dev/icons/uploading-ic
 - 16x16 pixels
 - PNG (24-bit RGBA) or GIF
 - Auto-convert is available for larger images
-
-## MYO Card Limits
-
-| Limit | Value |
-|---|---|
-| Max tracks per card | 100 |
-| Max file size per track | 100 MB |
-| Max total card size | 500 MB |
-| Max total duration | 5 hours |
-| Supported formats | MP3, M4A |
 
 ## File Structure
 
@@ -309,11 +212,3 @@ music-scraper-for-yoto-player/
 ├── requirements.txt        # Python dependencies
 └── downloads/              # Downloaded MP3s
 ```
-
-## Note on the Physical Card Step
-
-Everything is automated except the final step: linking the playlist to a physical MYO card. This requires either:
-- **NFC tap** via the Yoto mobile app (hold card to phone)
-- **Insert card** into a connected Yoto Player
-
-This is a hardware interaction that can't be automated via software.
