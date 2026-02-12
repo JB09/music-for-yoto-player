@@ -455,7 +455,7 @@ function pollUploadStatus(jobId) {
             } else if (data.status === 'done' && data.result) {
                 showUploadResult(data.result);
             } else if (data.status === 'error' && data.result) {
-                showUploadError(data.result.error || 'Upload failed');
+                showUploadError(data.result.error || 'Upload failed', data.result.details);
             } else {
                 showUploadError('Unexpected status: ' + data.status);
             }
@@ -495,12 +495,20 @@ function showUploadResult(data) {
     }
 }
 
-function showUploadError(msg) {
+function showUploadError(msg, details) {
     document.getElementById('yotoProgress').style.display = 'none';
     document.getElementById('yotoForm').style.display = '';
     var result = document.getElementById('yotoResult');
     result.style.display = 'block';
-    result.innerHTML = '<p class="text-danger">' + msg + '</p>';
+    var html = '<p class="text-danger">' + msg + '</p>';
+    if (details && details.length) {
+        html += '<ul class="text-sm text-muted" style="margin-top: 0.5rem; padding-left: 1.25rem;">';
+        for (var i = 0; i < details.length; i++) {
+            html += '<li>' + details[i] + '</li>';
+        }
+        html += '</ul>';
+    }
+    result.innerHTML = html;
 }
 </script>
 {% endif %}

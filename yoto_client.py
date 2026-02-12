@@ -57,7 +57,12 @@ class YotoClient:
         }))
 
     def _headers(self) -> dict:
-        """Return authorization headers for API calls."""
+        """Return authorization headers for API calls.
+
+        Automatically refreshes the access token if it has expired.
+        """
+        if self.access_token and time.time() >= self.expires_at and self.refresh_token:
+            self._refresh()
         return {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
@@ -235,9 +240,12 @@ class YotoClient:
         return upload_id
 
     def wait_for_transcode(
-        self, upload_id: str, max_attempts: int = 60, interval: float = 2.0
+        self, upload_id: str, max_attempts: int = 150, interval: float = 2.0
     ) -> dict:
-        """Poll until transcoding is complete. Returns transcode metadata."""
+        """Poll until transcoding is complete. Returns transcode metadata.
+
+        Default timeout: 150 attempts × 2s = 5 minutes.
+        """
         for attempt in range(max_attempts):
             resp = requests.get(
                 f"{API_BASE}/media/upload/{upload_id}/transcoded",
@@ -251,10 +259,13 @@ class YotoClient:
                 return data
 
             time.sleep(interval)
+            elapsed = int((attempt + 1) * interval)
             if attempt % 5 == 4:
-                print(f"    Still transcoding... ({attempt + 1}s)", flush=True)
+                print(f"    Still transcoding... ({elapsed}s)", flush=True)
 
-        raise TimeoutError(f"Transcoding timed out after {max_attempts * interval}s")
+        raise TimeoutError(
+            f"Transcoding timed out after {int(max_attempts * interval)}s"
+        )
 
     def upload_and_transcode(self, filepath: str) -> dict:
         """Upload a file and wait for transcoding. Returns transcode metadata."""
