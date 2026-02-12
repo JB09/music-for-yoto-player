@@ -169,24 +169,12 @@ def upload_to_yoto(downloaded_songs: list[dict], client_id: str, card_name: str)
         return
 
     print(f"\n  Uploading {len(downloaded_songs)} song(s) to Yoto...")
-    tracks = []
-    for i, song in enumerate(downloaded_songs, 1):
-        filepath = song["filepath"]
-        label = f"{song['title']} - {song['artist']}"
-        print(f"\n  [{i}/{len(downloaded_songs)}] {label}")
+    print(f"  (All files will be uploaded first, then transcoded in parallel)\n")
 
-        try:
-            transcode_data = client.upload_and_transcode(filepath)
-            tracks.append({
-                "title": label,
-                "transcodedSha256": transcode_data["transcodedSha256"],
-                "duration": transcode_data.get("duration", 0),
-                "fileSize": transcode_data.get("fileSize", 0),
-                "channels": transcode_data.get("channels", "stereo"),
-                "format": transcode_data.get("format", "aac"),
-            })
-        except Exception as e:
-            print(f"    Failed to upload: {e}")
+    tracks, errors = client.batch_upload_and_transcode(downloaded_songs)
+
+    for err in errors:
+        print(f"    Error: {err}")
 
     if not tracks:
         print("\n  No tracks were uploaded successfully.")

@@ -854,32 +854,27 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
             job["result"] = {"error": f"Failed to load existing card: {e}"}
             return
 
-    tracks = []
-    errors = []
-    cancelled = False
-    for i, song in enumerate(successful):
-        # Check if user requested cancellation before starting next track
-        if job["status"] == "cancelling":
-            cancelled = True
-            break
-        job["current"] = i + 1
-        job["current_title"] = song["title"]
-        try:
-            data = client.upload_and_transcode(song["filepath"])
-            tracks.append({
-                "title": f"{song['title']} - {song['artist']}",
-                "transcodedSha256": data["transcodedSha256"],
-                "duration": data.get("duration", 0),
-                "fileSize": data.get("fileSize", 0),
-                "channels": data.get("channels", "stereo"),
-                "format": data.get("format", "aac"),
-            })
-        except Exception as e:
-            errors.append(f"{song['title']}: {e}")
-            # Also check for cancellation after a failed upload
-            if job["status"] == "cancelling":
-                cancelled = True
-                break
+    def on_progress(phase, current, total, title):
+        if phase == "uploading":
+            job["current"] = current
+            job["current_title"] = f"Uploading: {title}"
+        elif phase == "transcoding":
+            job["current"] = current
+            job["current_title"] = (
+                f"Transcoding: {current}/{total} done"
+                if current > 0
+                else f"Transcoding {total} track(s)..."
+            )
+
+    def cancel_check():
+        return job["status"] == "cancelling"
+
+    tracks, errors = client.batch_upload_and_transcode(
+        successful,
+        on_progress=on_progress,
+        cancel_check=cancel_check,
+    )
+    cancelled = job["status"] == "cancelling"
 
     job["errors"] = errors
 

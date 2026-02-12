@@ -277,6 +277,115 @@ class YotoClient:
         print(f"    Transcoded successfully.", flush=True)
         return result
 
+    def batch_upload_and_transcode(
+        self,
+        songs: list[dict],
+        on_progress=None,
+        cancel_check=None,
+        max_transcode_time: int = 1200,
+    ) -> tuple[list[dict], list[str]]:
+        """Upload all files first, then poll all transcodes in parallel.
+
+        This is much faster than sequential upload+transcode because Yoto
+        transcodes files concurrently on their servers.
+
+        Args:
+            songs: list of dicts with 'filepath', 'title', 'artist' keys.
+            on_progress: optional callback(phase, current, total, title) for UI updates.
+            cancel_check: optional callable returning True if user cancelled.
+            max_transcode_time: max seconds to wait for all transcoding (default 20min).
+
+        Returns:
+            (tracks, errors) — tracks is a list of transcode result dicts,
+            errors is a list of error message strings.
+        """
+        tracks = []
+        errors = []
+        upload_ids = []  # (upload_id, song) pairs for transcode polling
+
+        # Phase 1: Upload all files (fast — just S3 PUTs)
+        for i, song in enumerate(songs):
+            if cancel_check and cancel_check():
+                break
+            filepath = song["filepath"]
+            label = f"{song['title']} - {song['artist']}"
+            if on_progress:
+                on_progress("uploading", i + 1, len(songs), song["title"])
+            print(f"    Uploading {Path(filepath).name}...", flush=True)
+            try:
+                upload_id = self.upload_file(filepath)
+                upload_ids.append((upload_id, song))
+            except Exception as e:
+                errors.append(f"{label}: upload failed — {e}")
+
+        if not upload_ids:
+            return tracks, errors
+
+        # Phase 2: Poll all transcodes together
+        if on_progress:
+            on_progress("transcoding", 0, len(upload_ids), None)
+        print(f"    Waiting for {len(upload_ids)} track(s) to transcode...", flush=True)
+
+        pending = {uid: song for uid, song in upload_ids}
+        interval = 5.0
+        elapsed = 0.0
+
+        while pending and elapsed < max_transcode_time:
+            if cancel_check and cancel_check():
+                break
+
+            time.sleep(interval)
+            elapsed += interval
+
+            # Check all pending transcodes
+            done_ids = []
+            for upload_id, song in list(pending.items()):
+                try:
+                    resp = requests.get(
+                        f"{API_BASE}/media/upload/{upload_id}/transcoded",
+                        params={"loudnorm": "false"},
+                        headers=self._headers(),
+                    )
+                    resp.raise_for_status()
+                    data = resp.json().get("data", {}).get("transcode", {})
+
+                    if data.get("transcodedSha256"):
+                        label = f"{song['title']} - {song['artist']}"
+                        tracks.append({
+                            "title": label,
+                            "transcodedSha256": data["transcodedSha256"],
+                            "duration": data.get("duration", 0),
+                            "fileSize": data.get("fileSize", 0),
+                            "channels": data.get("channels", "stereo"),
+                            "format": data.get("format", "aac"),
+                        })
+                        done_ids.append(upload_id)
+                        print(f"    Transcoded: {song['title']}", flush=True)
+                except Exception as e:
+                    label = f"{song['title']} - {song['artist']}"
+                    errors.append(f"{label}: transcode check failed — {e}")
+                    done_ids.append(upload_id)
+
+            for uid in done_ids:
+                del pending[uid]
+
+            if pending and on_progress:
+                completed = len(upload_ids) - len(pending)
+                on_progress("transcoding", completed, len(upload_ids), None)
+
+            if pending and int(elapsed) % 30 == 0:
+                print(
+                    f"    Still transcoding {len(pending)} track(s)... ({int(elapsed)}s)",
+                    flush=True,
+                )
+
+        # Any remaining are timeouts
+        for upload_id, song in pending.items():
+            label = f"{song['title']} - {song['artist']}"
+            errors.append(f"{label}: transcoding timed out after {int(max_transcode_time)}s")
+
+        return tracks, errors
+
     # ── Card/Playlist Creation ──────────────────────────────────────
 
     def create_myo_card(self, title: str, tracks: list[dict],

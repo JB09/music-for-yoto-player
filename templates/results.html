@@ -729,10 +729,11 @@ function pollUploadStatus(jobId) {
                     text.textContent = 'Stopping after current track finishes...';
                     document.getElementById('yotoProgressEta').textContent = '';
                     document.getElementById('cancelUploadBtn').style.display = 'none';
-                } else if (data.current > 0 && data.total > 0) {
-                    text.textContent = 'Uploading track ' + data.current +
-                        ' of ' + data.total + ': ' + (data.current_title || '');
-                    updateEta(data.current, data.total);
+                } else if (data.current_title) {
+                    text.textContent = data.current_title;
+                    if (data.current > 0 && data.total > 0) {
+                        updateEta(data.current, data.total);
+                    }
                 }
                 setTimeout(function() { pollUploadStatus(jobId); }, 5000);
             } else if (data.status === 'done' && data.result) {
