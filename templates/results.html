@@ -168,6 +168,10 @@
     <div id="yotoProgress" style="display: none;" class="text-center">
         <div class="spinner"></div>
         <p id="yotoProgressText" class="text-muted text-sm mt-1">Uploading to Yoto...</p>
+        <p id="yotoProgressEta" class="text-muted text-sm" style="margin-top: 0.25rem;"></p>
+        <p class="text-sm" style="margin-top: 0.75rem; color: #eab308;">
+            Please don't navigate away from this page — you won't be able to return to check the result.
+        </p>
     </div>
 
     <div id="yotoResult" style="display: none;"></div>
@@ -410,12 +414,20 @@ function changeIcon() {
     document.getElementById('iconPreviewSection').style.display = 'none';
 }
 
+var uploadStartTime = 0;
+var lastCompletedTrack = 0;
+var trackCompletionTimes = [];
+
 function uploadToYoto() {
     var name = document.getElementById('cardName').value.trim() || 'My Playlist';
     var iconMode = document.getElementById('iconMode').value;
     var target = document.getElementById('cardTarget').value;
     document.getElementById('yotoForm').style.display = 'none';
     document.getElementById('yotoProgress').style.display = 'block';
+
+    uploadStartTime = Date.now();
+    lastCompletedTrack = 0;
+    trackCompletionTimes = [];
 
     var form = new FormData();
     form.append('card_name', name);
@@ -441,6 +453,45 @@ function uploadToYoto() {
         .catch(function(err) { showUploadError('Upload failed: ' + err.message); });
 }
 
+function formatDuration(ms) {
+    var secs = Math.round(ms / 1000);
+    if (secs < 60) return secs + 's';
+    var mins = Math.floor(secs / 60);
+    secs = secs % 60;
+    return mins + 'm ' + (secs < 10 ? '0' : '') + secs + 's';
+}
+
+function updateEta(current, total) {
+    var etaEl = document.getElementById('yotoProgressEta');
+    if (current <= 0 || total <= 0) { etaEl.textContent = ''; return; }
+
+    // When the server moves to a new track, record a completion
+    if (current > lastCompletedTrack) {
+        trackCompletionTimes.push(Date.now());
+        lastCompletedTrack = current;
+    }
+
+    var elapsed = Date.now() - uploadStartTime;
+
+    // Need at least one completed track transition to estimate
+    if (trackCompletionTimes.length >= 2) {
+        // Average time between track completions
+        var avgPerTrack = (trackCompletionTimes[trackCompletionTimes.length - 1] -
+                          trackCompletionTimes[0]) / (trackCompletionTimes.length - 1);
+        // Remaining = tracks not yet started (current is in-progress)
+        var remaining = total - current;
+        // Add estimated remaining time for the current in-progress track
+        var timeSinceLastCompletion = Date.now() - trackCompletionTimes[trackCompletionTimes.length - 1];
+        var currentTrackRemaining = Math.max(0, avgPerTrack - timeSinceLastCompletion);
+        var etaMs = (remaining * avgPerTrack) + currentTrackRemaining;
+        etaEl.textContent = 'Elapsed: ' + formatDuration(elapsed) +
+            ' · Est. remaining: ~' + formatDuration(etaMs);
+    } else {
+        etaEl.textContent = 'Elapsed: ' + formatDuration(elapsed) +
+            ' · Estimating time remaining...';
+    }
+}
+
 function pollUploadStatus(jobId) {
     fetch('/yoto/upload/status?job_id=' + encodeURIComponent(jobId))
         .then(function(r) { return r.json(); })
@@ -450,6 +501,7 @@ function pollUploadStatus(jobId) {
                 if (data.current > 0 && data.total > 0) {
                     text.textContent = 'Uploading track ' + data.current +
                         ' of ' + data.total + ': ' + (data.current_title || '');
+                    updateEta(data.current, data.total);
                 }
                 setTimeout(function() { pollUploadStatus(jobId); }, 2000);
             } else if (data.status === 'done' && data.result) {
