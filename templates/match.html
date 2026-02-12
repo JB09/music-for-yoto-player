@@ -83,12 +83,14 @@
                         </div>
                     </button>
                 </form>
+                {% if supports_preview %}
                 <button type="button" class="btn btn-secondary preview-btn"
-                        data-video-id="{{ r.videoId }}"
+                        data-track-id="{{ r.trackId }}"
                         style="padding: 0.6rem; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-width: 44px;"
                         title="Preview">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
                 </button>
+                {% endif %}
             </div>
             <div class="preview-player" style="display: none; margin-top: 0.35rem; border-radius: 8px; overflow: hidden;"></div>
         </div>
@@ -218,7 +220,7 @@ document.querySelectorAll('.preview-btn').forEach(function(btn) {
         e.stopPropagation();
         var wrapper = btn.closest('.yt-result-wrapper');
         var player = wrapper.querySelector('.preview-player');
-        var videoId = btn.dataset.videoId;
+        var trackId = btn.dataset.trackId;
 
         // Close any other open previews
         document.querySelectorAll('.yt-result-wrapper').forEach(function(w) {
@@ -239,7 +241,7 @@ document.querySelectorAll('.preview-btn').forEach(function(btn) {
             iframe.style.border = 'none';
             iframe.allow = 'autoplay; encrypted-media';
             iframe.allowFullscreen = true;
-            iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?autoplay=1&origin=' + encodeURIComponent(window.location.origin);
+            iframe.src = 'https://www.youtube-nocookie.com/embed/' + trackId + '?autoplay=1&origin=' + encodeURIComponent(window.location.origin);
             player.innerHTML = '';
             player.appendChild(iframe);
             player.style.display = 'block';
@@ -254,14 +256,14 @@ document.querySelectorAll('.preview-btn').forEach(function(btn) {
                 } catch(e) {}
             });
             iframe.addEventListener('error', function() {
-                showYouTubeFallback(player, videoId, btn);
+                showYouTubeFallback(player, trackId, btn);
             });
             // Fallback: if iframe loads but video shows error, provide a link after a short delay
             setTimeout(function() {
                 if (player.style.display !== 'none' && player.querySelector('iframe')) {
                     var fallback = document.createElement('div');
                     fallback.style.cssText = 'text-align:center; padding:4px 0; font-size:12px;';
-                    fallback.innerHTML = 'Not playing? <a href="https://www.youtube.com/watch?v=' + videoId + '" target="_blank" rel="noopener" style="color:#3b82f6; text-decoration:underline;">Open on YouTube</a>';
+                    fallback.innerHTML = 'Not playing? <a href="https://www.youtube.com/watch?v=' + trackId + '" target="_blank" rel="noopener" style="color:#3b82f6; text-decoration:underline;">Open on YouTube</a>';
                     player.appendChild(fallback);
                 }
             }, 2000);

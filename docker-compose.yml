@@ -10,3 +10,36 @@ services:
       - YOTO_CLIENT_ID=${YOTO_CLIENT_ID:-}
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-}
       - OUTPUT_DIR=/app/downloads
+      # Music provider: "youtube" (default) or "plex"
+      - MUSIC_PROVIDER=${MUSIC_PROVIDER:-youtube}
+      # YouTube provider: yt-dlp-host sidecar (recommended)
+      - DOWNLOAD_SERVICE_URL=${DOWNLOAD_SERVICE_URL:-http://ytdlp:5000}
+      - DOWNLOAD_API_KEY=${DOWNLOAD_API_KEY:-}
+      # Plex provider (only if MUSIC_PROVIDER=plex)
+      - PLEX_URL=${PLEX_URL:-}
+      - PLEX_TOKEN=${PLEX_TOKEN:-}
+      - PLEX_MUSIC_LIBRARY=${PLEX_MUSIC_LIBRARY:-Music}
+    depends_on:
+      ytdlp:
+        condition: service_started
+        required: false
+
+  # yt-dlp download service (user-provided, handles YouTube audio downloads)
+  # The user chooses to run this service — it is not bundled with this project.
+  # See: https://github.com/Vasysik/yt-dlp-host
+  ytdlp:
+    build:
+      context: https://github.com/Vasysik/yt-dlp-host.git
+    volumes:
+      - ytdlp-data:/app/downloads
+      - ytdlp-keys:/app/jsons
+    environment:
+      - FLASK_APP=src.server:app
+      - FLASK_RUN_HOST=0.0.0.0
+    restart: unless-stopped
+    profiles:
+      - youtube
+
+volumes:
+  ytdlp-data:
+  ytdlp-keys:

@@ -9,14 +9,12 @@ Usage:
 """
 
 import argparse
-import glob
 import os
 import random
 import sys
 from pathlib import Path
 
-import yt_dlp
-from ytmusicapi import YTMusic
+from music_providers import get_provider
 
 MAX_SONGS = 12
 
@@ -60,20 +58,9 @@ def display_final_list(songs: list[str]):
     print()
 
 
-def search_youtube(ytmusic: YTMusic, query: str, num_results: int = 5) -> list[dict]:
-    """Search YouTube Music for a song and return top results."""
-    results = ytmusic.search(query, filter="songs", limit=num_results)
-    parsed = []
-    for r in results:
-        artists = ", ".join(a["name"] for a in r.get("artists", []))
-        parsed.append({
-            "title": r.get("title", "Unknown"),
-            "artist": artists or "Unknown",
-            "album": r.get("album", {}).get("name", "") if r.get("album") else "",
-            "duration": r.get("duration", ""),
-            "videoId": r.get("videoId", ""),
-        })
-    return parsed
+def search_music(provider, query: str, num_results: int = 5) -> list[dict]:
+    """Search for a song using the configured provider and return top results."""
+    return provider.search(query, num_results=num_results)
 
 
 def confirm_song(query: str, results: list[dict]) -> dict | None:
@@ -116,47 +103,13 @@ def confirm_song(query: str, results: list[dict]) -> dict | None:
         print(f"  Invalid choice. Enter 1-{len(results)}, 0, or r.")
 
 
-def download_audio(video_id: str, title: str, artist: str, output_dir: str) -> str | None:
-    """Download audio from YouTube using yt-dlp. Returns the output filepath or None."""
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    safe_filename = f"{artist} - {title}".replace("/", "-").replace("\\", "-")
-    outtmpl = os.path.join(output_dir, f"{safe_filename}.%(ext)s")
-
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-        "outtmpl": outtmpl,
-        "quiet": True,
-        "no_warnings": True,
-        "progress_hooks": [_progress_hook],
-    }
-
+def get_audio(provider, track_id: str, title: str, artist: str) -> str | None:
+    """Get audio for a track using the configured provider. Returns filepath or None."""
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        # Find the output file (yt-dlp replaces %(ext)s with the final extension)
-        mp3_path = os.path.join(output_dir, f"{safe_filename}.mp3")
-        if os.path.exists(mp3_path):
-            return mp3_path
-        # Fallback: glob for the file
-        matches = glob.glob(os.path.join(output_dir, f"{safe_filename}.*"))
-        return matches[0] if matches else None
+        return provider.get_audio(track_id, title, artist)
     except Exception as e:
         print(f"  Error downloading: {e}")
         return None
-
-
-def _progress_hook(d):
-    """Show download progress."""
-    if d["status"] == "downloading":
-        pct = d.get("_percent_str", "?%").strip()
-        print(f"\r  Downloading... {pct}", end="", flush=True)
-    elif d["status"] == "finished":
-        print(f"\r  Download complete. Converting to MP3...", flush=True)
 
 
 def upload_to_yoto(downloaded_songs: list[dict], client_id: str, card_name: str):
@@ -274,20 +227,19 @@ def main():
         print("  Cancelled.")
         sys.exit(0)
 
-    # Create output directory
+    # Create output directory and initialize provider
     output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
 
-    # Initialize YouTube Music search
-    ytmusic = YTMusic()
+    music_provider = get_provider(output_dir=output_dir)
 
     # ── Phase 1: Search and confirm all songs ──────────────────────
-    print("\n--- PHASE 1: Search & Confirm Songs on YouTube ---")
+    print(f"\n--- PHASE 1: Search & Confirm Songs ({music_provider.name}) ---")
     confirmed = []
     for song_query in songs:
         query = song_query
         while True:
-            results = search_youtube(ytmusic, query)
+            results = search_music(music_provider, query)
             selection = confirm_song(query, results)
             if selection is None:
                 print(f"  Skipped: {song_query}")
@@ -307,7 +259,7 @@ def main():
     downloaded = []
     for i, song in enumerate(confirmed, 1):
         print(f"\n[{i}/{len(confirmed)}] {song['title']} - {song['artist']}")
-        filepath = download_audio(song["videoId"], song["title"], song["artist"], output_dir)
+        filepath = get_audio(music_provider, song["trackId"], song["title"], song["artist"])
         if filepath:
             downloaded.append({
                 "title": song["title"],

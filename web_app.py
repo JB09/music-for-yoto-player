@@ -4,7 +4,7 @@ Music for Yoto Player - Web UI (Flask).
 A step-by-step wizard:
   1. Build playlist via AI chat or paste a song list
   2. Review shuffled/capped list
-  3. Confirm YouTube matches for each song
+  3. Confirm song matches from music provider
   4. Download MP3s
   5. Upload to Yoto (optional)
 """
@@ -14,15 +14,13 @@ import os
 import random
 import secrets
 import hashlib
-import glob
 import threading
 import uuid
 from pathlib import Path
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 
-import yt_dlp
-from ytmusicapi import YTMusic
+from music_providers import get_provider
 
 MAX_SONGS = 12
 MAX_TRACKS_PER_CARD = 100
@@ -31,7 +29,7 @@ OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "downloads")
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
-ytmusic = YTMusic()
+provider = get_provider(output_dir=OUTPUT_DIR)
 
 # In-memory store for background upload jobs keyed by job_id.
 # Each entry: {"status": "running"|"done"|"error"|"cancelling", "current": int,
@@ -120,53 +118,13 @@ def _flag_downloaded_results(results: list[dict]):
             r["partial_match"] = best_match
 
 
-def search_youtube_music(query: str, num_results: int = 5) -> list[dict]:
-    results = ytmusic.search(query, filter="songs", limit=num_results)
-    parsed = []
-    for r in results:
-        artists = ", ".join(a["name"] for a in r.get("artists", []))
-        parsed.append({
-            "title": r.get("title", "Unknown"),
-            "artist": artists or "Unknown",
-            "album": r.get("album", {}).get("name", "") if r.get("album") else "",
-            "duration": r.get("duration", ""),
-            "videoId": r.get("videoId", ""),
-        })
-    return parsed
+def search_music(query: str, num_results: int = 5) -> list[dict]:
+    return provider.search(query, num_results=num_results)
 
 
-def download_audio(video_id: str, title: str, artist: str,
-                    force: bool = False) -> str | None:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    safe_filename = f"{artist} - {title}".replace("/", "-").replace("\\", "-")
-
-    # Skip download if the file already exists (unless force re-download)
-    mp3_path = os.path.join(OUTPUT_DIR, f"{safe_filename}.mp3")
-    if not force and os.path.exists(mp3_path):
-        return mp3_path
-
-    outtmpl = os.path.join(OUTPUT_DIR, f"{safe_filename}.%(ext)s")
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-        "outtmpl": outtmpl,
-        "quiet": True,
-        "no_warnings": True,
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-        mp3_path = os.path.join(OUTPUT_DIR, f"{safe_filename}.mp3")
-        if os.path.exists(mp3_path):
-            return mp3_path
-        matches = glob.glob(os.path.join(OUTPUT_DIR, f"{safe_filename}.*"))
-        return matches[0] if matches else None
-    except Exception:
-        return None
+def get_audio(track_id: str, title: str, artist: str,
+              force: bool = False) -> str | None:
+    return provider.get_audio(track_id, title, artist, force=force)
 
 
 def chat_with_claude(messages: list[dict]) -> str:
@@ -348,7 +306,7 @@ def reshuffle():
     return redirect(url_for("review"))
 
 
-# ── YouTube matching (one song at a time) ───────────────────────────
+# ── Song matching (one song at a time) ────────────────────────────
 
 
 def _finish_rematch():
@@ -384,8 +342,8 @@ def match_song():
             if is_rematch:
                 # Download immediately and update the results entry
                 force = selected.get("force_download", False)
-                filepath = download_audio(
-                    selected["videoId"], selected["title"], selected["artist"],
+                filepath = get_audio(
+                    selected["trackId"], selected["title"], selected["artist"],
                     force=force,
                 )
                 rematch_idx = session["rematch_index"]
@@ -439,7 +397,7 @@ def match_song():
             if new_query:
                 return redirect(url_for("match_song", q=new_query))
 
-    results = search_youtube_music(query)
+    results = search_music(query)
 
     # Flag results that already have a downloaded file in OUTPUT_DIR
     _flag_downloaded_results(results)
@@ -457,6 +415,8 @@ def match_song():
         total=len(songs),
         confirmed_count=len(confirmed),
         is_rematch=is_rematch,
+        provider_name=provider.name,
+        supports_preview=provider.supports_preview,
     )
 
 
@@ -482,8 +442,8 @@ def download_start():
             filepath = existing
         else:
             force = song.get("force_download", False)
-            filepath = download_audio(song["videoId"], song["title"], song["artist"],
-                                      force=force)
+            filepath = get_audio(song["trackId"], song["title"], song["artist"],
+                                force=force)
         results.append({
             "title": song["title"],
             "artist": song["artist"],
