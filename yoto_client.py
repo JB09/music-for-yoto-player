@@ -240,11 +240,11 @@ class YotoClient:
         return upload_id
 
     def wait_for_transcode(
-        self, upload_id: str, max_attempts: int = 150, interval: float = 2.0
+        self, upload_id: str, max_attempts: int = 300, interval: float = 2.0
     ) -> dict:
         """Poll until transcoding is complete. Returns transcode metadata.
 
-        Default timeout: 150 attempts × 2s = 5 minutes.
+        Default timeout: 300 attempts × 2s = 10 minutes.
         """
         for attempt in range(max_attempts):
             resp = requests.get(
