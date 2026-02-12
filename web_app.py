@@ -790,13 +790,43 @@ def yoto_icon_upload():
         return jsonify({"error": f"Icon upload failed: {e}"}), 500
 
 
-# ── Cover Image Upload ─────────────────────────────────────────────
+# ── Cover Image ────────────────────────────────────────────────────
+
+
+@app.route("/yoto/cover/preview", methods=["POST"])
+def yoto_cover_preview():
+    """Generate a cover image preview using AI."""
+    import base64
+
+    card_name = request.form.get("card_name", "My Playlist")
+    keywords = request.form.get("keywords", "").strip()
+
+    results = session.get("download_results", [])
+    successful = [r for r in results if r["success"]]
+    song_titles = [f"{s['title']} - {s['artist']}" for s in successful]
+
+    from icon_selector import generate_cover_image
+    try:
+        cover_bytes = generate_cover_image(song_titles, card_name, keywords=keywords)
+        if cover_bytes:
+            b64 = base64.b64encode(cover_bytes).decode("ascii")
+            return jsonify({
+                "preview": f"data:image/jpeg;base64,{b64}",
+            })
+        else:
+            return jsonify({"error": "Cover generation failed. Try again or add keywords."}), 500
+    except Exception as e:
+        return jsonify({"error": f"Cover generation failed: {e}"}), 500
 
 
 @app.route("/yoto/cover/upload", methods=["POST"])
 def yoto_cover_upload():
-    """Upload a cover image to Yoto and return the mediaUrl."""
+    """Upload a cover image to Yoto and return the mediaUrl.
+
+    Accepts either a file upload (cover_file) or a base64 data URL (cover_data_url).
+    """
     from yoto_client import YotoClient
+    import base64 as b64mod
 
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
     if not client_id:
@@ -807,11 +837,18 @@ def yoto_cover_upload():
         return jsonify({"error": "Not authenticated"}), 401
 
     file = request.files.get("cover_file")
-    if not file:
-        return jsonify({"error": "No file provided"}), 400
+    data_url = request.form.get("cover_data_url", "")
 
-    content_type = file.content_type or "image/jpeg"
-    image_data = file.read()
+    if file:
+        content_type = file.content_type or "image/jpeg"
+        image_data = file.read()
+    elif data_url.startswith("data:image/"):
+        # Parse data URL: data:image/jpeg;base64,<data>
+        header, b64_data = data_url.split(",", 1)
+        content_type = header.split(";")[0].replace("data:", "")
+        image_data = b64mod.b64decode(b64_data)
+    else:
+        return jsonify({"error": "No file or data URL provided"}), 400
 
     try:
         result = client.upload_cover_image(image_data, content_type=content_type)

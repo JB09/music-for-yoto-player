@@ -1,11 +1,15 @@
 """
-AI-powered icon selection for Yoto MYO cards.
+AI-powered icon and cover image selection for Yoto MYO cards.
 
-Two strategies:
+Icons:
   1. Pick the best-matching public icon from the Yoto shared library.
   2. Generate a custom 16x16 pixel icon via AI (requires ANTHROPIC_API_KEY).
 
+Cover images:
+  3. Generate a custom cover image via AI (requires ANTHROPIC_API_KEY + Pillow).
+
 The Yoto Player display supports 16x16 pixel icons in PNG format.
+Cover images are larger artwork shown in the Yoto app.
 """
 
 import base64
@@ -161,6 +165,91 @@ def generate_custom_icon(song_titles: list[str], card_name: str) -> bytes | None
         exec(code, namespace)  # noqa: S102
 
         create_fn = namespace.get("create_icon")
+        if create_fn and callable(create_fn):
+            result = create_fn()
+            if isinstance(result, bytes) and len(result) > 0:
+                return result
+
+    except Exception:
+        pass
+
+    return None
+
+
+def generate_cover_image(song_titles: list[str], card_name: str,
+                         keywords: str = "") -> bytes | None:
+    """
+    Use Claude to generate Python code that creates a cover image using Pillow,
+    then execute it to produce JPEG bytes.
+
+    Args:
+        song_titles: List of song title strings.
+        card_name: The name of the MYO card/playlist.
+        keywords: Optional keywords to guide the style/theme.
+
+    Returns:
+        JPEG image bytes, or None on failure.
+    """
+    if anthropic is None:
+        return None
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    prompt = (
+        f"Generate Python code that creates a cover image for a children's audio playlist card.\n\n"
+        f"Card name: \"{card_name}\"\n"
+        f"Songs:\n"
+    )
+    for i, title in enumerate(song_titles[:10], 1):
+        prompt += f"  {i}. {title}\n"
+
+    if keywords:
+        prompt += f"\nStyle/theme keywords: {keywords}\n"
+
+    prompt += (
+        f"\nRequirements:\n"
+        f"- Use PIL/Pillow (from PIL import Image, ImageDraw, ImageFont).\n"
+        f"- Output must be 500x500 pixels, RGB, saved as JPEG.\n"
+        f"- Create an appealing, colorful, child-friendly design.\n"
+        f"- Use bold geometric shapes, gradients, and patterns — no text rendering "
+        f"(Pillow default font is too small and ugly at this scale).\n"
+        f"- Think: abstract art, simple illustrations, color blocks, patterns.\n"
+        f"- Use a cohesive color palette that fits the playlist mood.\n"
+        f"- The code should define a function `create_cover() -> bytes` that returns JPEG bytes.\n"
+        f"- Use io.BytesIO to return the bytes (import io).\n"
+        f"- Only output the Python code in a ```python code block, nothing else.\n"
+    )
+
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text
+
+        # Extract Python code
+        start = text.find("```python")
+        if start == -1:
+            start = text.find("```")
+        if start == -1:
+            return None
+
+        code_start = text.find("\n", start) + 1
+        code_end = text.find("```", code_start)
+        if code_end == -1:
+            return None
+
+        code = text[code_start:code_end].strip()
+
+        # Execute the generated code
+        namespace = {}
+        exec(code, namespace)  # noqa: S102
+
+        create_fn = namespace.get("create_cover")
         if create_fn and callable(create_fn):
             result = create_fn()
             if isinstance(result, bytes) and len(result) > 0:
