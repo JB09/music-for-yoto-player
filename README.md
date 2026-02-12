@@ -212,7 +212,8 @@ music-scraper-for-yoto-player/
 │   ├── review.html     #   Review shuffled playlist
 │   ├── match.html      #   Confirm YouTube matches
 │   ├── download.html   #   Download progress
-│   └── results.html    #   Results + Yoto upload
+│   ├── finalize.html   #   Finalize playlist (edit, reorder, remove)
+│   └── yoto.html       #   Yoto upload
 ├── yoto_scraper.py     # CLI application
 ├── playlist_chat.py    # AI chat playlist generator
 ├── yoto_client.py      # Yoto API client
