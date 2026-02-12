@@ -25,6 +25,7 @@ import yt_dlp
 from ytmusicapi import YTMusic
 
 MAX_SONGS = 12
+MAX_TRACKS_PER_CARD = 100
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "downloads")
 
 app = Flask(__name__)
@@ -699,8 +700,6 @@ def yoto_callback():
 
 
 # ── Yoto Cards List ────────────────────────────────────────────────
-
-MAX_TRACKS_PER_CARD = 100
 
 
 @app.route("/yoto/cards")
