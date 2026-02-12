@@ -5,7 +5,8 @@ A step-by-step wizard:
   1. Build playlist via AI chat or paste a song list
   2. Review shuffled/capped list
   3. Confirm YouTube matches for each song
-  4. Download MP3s + optional Yoto upload
+  4. Download MP3s
+  5. Upload to Yoto (optional)
 """
 
 import json
@@ -495,24 +496,35 @@ def download_start():
 
 @app.route("/download/results")
 def download_results():
-    from yoto_client import YotoClient
-
     results = session.get("download_results", [])
-    confirmed = session.get("confirmed_songs", [])
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
-    yoto_available = bool(client_id)
-
-    yoto_authenticated = False
-    if yoto_available:
-        client = YotoClient(client_id)
-        yoto_authenticated = client.is_authenticated()
 
     return render_template(
         "results.html",
         results=results,
         total=len(results),
         success_count=sum(1 for r in results if r["success"]),
-        yoto_available=yoto_available,
+        yoto_available=bool(client_id),
+    )
+
+
+@app.route("/yoto")
+def yoto_page():
+    from yoto_client import YotoClient
+
+    results = session.get("download_results", [])
+    success_count = sum(1 for r in results if r["success"])
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+
+    if not client_id or success_count == 0:
+        return redirect(url_for("download_results"))
+
+    client = YotoClient(client_id)
+    yoto_authenticated = client.is_authenticated()
+
+    return render_template(
+        "yoto.html",
+        success_count=success_count,
         yoto_authenticated=yoto_authenticated,
     )
 
@@ -662,11 +674,8 @@ def yoto_callback():
     error = request.args.get("error")
     if error:
         error_desc = request.args.get("error_description", error)
-        return render_template("results.html",
-                               results=session.get("download_results", []),
-                               total=len(session.get("confirmed_songs", [])),
+        return render_template("yoto.html",
                                success_count=sum(1 for r in session.get("download_results", []) if r["success"]),
-                               yoto_available=True,
                                yoto_authenticated=False,
                                yoto_auth_error=f"Authorization failed: {error_desc}")
 
@@ -685,8 +694,8 @@ def yoto_callback():
     except Exception as e:
         return f"Token exchange failed: {e}", 500
 
-    # Redirect back to the results page (now authenticated)
-    return redirect(url_for("download_results"))
+    # Redirect back to the Yoto page (now authenticated)
+    return redirect(url_for("yoto_page"))
 
 
 # ── Yoto Cards List ────────────────────────────────────────────────

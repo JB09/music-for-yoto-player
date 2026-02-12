@@ -1,0 +1,649 @@
+{% extends "base.html" %}
+{% block title %}Yoto — Music for Yoto Player{% endblock %}
+
+{% block steps %}
+<div class="steps">
+    <div class="step done"><div class="step-dot"></div> Build</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Review</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Match</div>
+    <span class="step-arrow">›</span>
+    <div class="step done"><div class="step-dot"></div> Download</div>
+    <span class="step-arrow">›</span>
+    <div class="step active"><div class="step-dot"></div> Yoto</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card" id="yotoCard">
+    <h2>Upload to Yoto</h2>
+    <p class="text-muted text-sm" style="margin-bottom: 1rem;">
+        Create a MYO card playlist with your downloaded songs.
+    </p>
+
+    {% if yoto_auth_error %}
+    <p class="text-danger" style="margin-bottom: 1rem;">{{ yoto_auth_error }}</p>
+    {% endif %}
+
+    {% if yoto_authenticated %}
+    <div id="yotoForm">
+        <div style="margin-bottom: 0.75rem;">
+            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
+                Destination
+            </label>
+            <select id="cardTarget" onchange="onCardTargetChange()"
+                    style="width: 100%; padding: 0.5rem; border-radius: 6px;
+                    border: 1px solid #334155; background: #1e293b; color: #e2e8f0;">
+                <option value="new">Create new MYO card</option>
+            </select>
+            <p id="cardCapacity" class="text-muted text-sm" style="margin-top: 0.35rem; display: none;"></p>
+        </div>
+        <input type="text" id="cardName" placeholder="Playlist name (e.g. Bedtime Songs)"
+               style="margin-bottom: 0.75rem;">
+        <div id="coverWrapper" style="margin-bottom: 0.75rem;">
+            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
+                Cover Image <span style="opacity: 0.5;">(optional)</span>
+            </label>
+            <div id="coverUploadArea" style="border: 1px dashed #334155; border-radius: 8px;
+                    padding: 1rem; text-align: center; cursor: pointer; background: #0f172a;"
+                 onclick="document.getElementById('coverFileInput').click()">
+                <input type="file" id="coverFileInput" accept="image/jpeg,image/png"
+                       onchange="onCoverSelected(this)" style="display: none;">
+                <p class="text-muted text-sm" id="coverPlaceholder">
+                    Click to upload a cover image
+                </p>
+                <p class="text-muted" style="font-size: 0.7rem; margin-top: 0.25rem; opacity: 0.6;">
+                    JPEG or PNG. 2″ × 3.5″ ratio (e.g. 600×1050px). Yoto will auto-resize.
+                </p>
+            </div>
+            <div id="coverUploading" style="display: none;" class="text-center">
+                <div class="spinner"></div>
+                <p class="text-muted text-sm mt-1">Uploading cover...</p>
+            </div>
+            <div id="coverConfirmed" style="display: none; margin-top: 0.5rem;
+                    padding: 0.5rem 0.75rem; border: 1px solid #22c55e; border-radius: 8px;
+                    background: #0f2a1a;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <img id="coverConfirmedImg" src="" alt="Cover"
+                         style="max-width: 48px; max-height: 48px; border-radius: 4px;">
+                    <div style="flex: 1;">
+                        <p class="text-success text-sm" style="font-weight: 500;">Cover set</p>
+                        <button onclick="removeCover()" class="text-sm"
+                                style="color: #94a3b8; background: none; border: none;
+                                       cursor: pointer; text-decoration: underline; padding: 0;">
+                            Change
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="iconModeWrapper" style="margin-bottom: 0.75rem;">
+            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
+                Card Icon
+            </label>
+            <select id="iconMode" onchange="onIconModeChange()"
+                    style="width: 100%; padding: 0.5rem; border-radius: 6px;
+                    border: 1px solid #334155; background: #1e293b; color: #e2e8f0;">
+                <option value="public">Auto-select from Yoto public icons (AI picks best match)</option>
+                <option value="generate">Generate custom 16x16 pixel art icon (AI created)</option>
+            </select>
+
+            <div id="iconPreviewSection" style="display: none; margin-top: 0.75rem;
+                    padding: 0.75rem; border: 1px solid #334155; border-radius: 8px;
+                    background: #0f172a;">
+                <div id="iconPreviewLoading" style="display: none;" class="text-center">
+                    <div class="spinner"></div>
+                    <p class="text-muted text-sm mt-1">Generating icon...</p>
+                </div>
+                <div id="iconPreviewResult" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                        <img id="iconPreviewImg" src="" alt="Icon preview"
+                             style="width: 64px; height: 64px; image-rendering: pixelated;
+                                    border: 1px solid #334155; border-radius: 4px;">
+                        <div style="flex: 1;">
+                            <p id="iconPreviewReason" class="text-muted text-sm"></p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button onclick="acceptIcon()" class="btn btn-primary" style="flex: 1;">
+                            Use this icon
+                        </button>
+                        <button onclick="retryIcon()" class="btn btn-secondary" style="flex: 1;">
+                            Try again
+                        </button>
+                    </div>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <input type="text" id="iconKeywords" placeholder="Add keywords (e.g. stars, ocean, animals)"
+                               style="flex: 1;">
+                        <button onclick="retryIconWithKeywords()" class="btn btn-secondary">
+                            Retry with keywords
+                        </button>
+                    </div>
+                    <div style="margin-top: 0.5rem; text-align: center;">
+                        <button onclick="switchIconMode()" class="btn btn-secondary btn-block" id="iconSwitchBtn"
+                                style="font-size: 0.8rem;">
+                            Switch to public icon library instead
+                        </button>
+                    </div>
+                </div>
+                <div id="iconPreviewError" style="display: none;">
+                    <p class="text-danger text-sm" id="iconPreviewErrorMsg"></p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button onclick="retryIcon()" class="btn btn-secondary" style="flex: 1;">Try again</button>
+                        <button onclick="switchIconMode()" class="btn btn-secondary" style="flex: 1;"
+                                id="iconSwitchBtnError">
+                            Try public icons instead
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="iconConfirmed" style="display: none; margin-top: 0.5rem;
+                    padding: 0.5rem 0.75rem; border: 1px solid #22c55e; border-radius: 8px;
+                    background: #0f2a1a; display: none;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <img id="iconConfirmedImg" src="" alt="Confirmed icon"
+                         style="width: 48px; height: 48px; image-rendering: pixelated;
+                                border-radius: 4px;">
+                    <div style="flex: 1;">
+                        <p class="text-success text-sm" style="font-weight: 500;">Icon confirmed</p>
+                        <button onclick="changeIcon()" class="text-sm"
+                                style="color: #94a3b8; background: none; border: none;
+                                       cursor: pointer; text-decoration: underline; padding: 0;">
+                            Change
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="previewIconBtn" onclick="previewIcon()"
+                    class="btn btn-secondary btn-block" style="margin-top: 0.5rem;">
+                Preview Icon
+            </button>
+        </div>
+        <button id="uploadBtn" onclick="uploadToYoto()" class="btn btn-primary btn-block">
+            Upload to Yoto &amp; Create MYO Card
+        </button>
+    </div>
+    {% else %}
+    <div id="yotoConnect">
+        <p class="text-muted text-sm" style="margin-bottom: 0.75rem;">
+            Connect your Yoto account to upload songs and create a MYO card.
+        </p>
+        <a href="/yoto/auth" class="btn btn-primary btn-block">
+            Connect to Yoto
+        </a>
+    </div>
+    {% endif %}
+
+    <div id="yotoProgress" style="display: none;" class="text-center">
+        <div class="spinner"></div>
+        <p id="yotoProgressText" class="text-muted text-sm mt-1">Uploading to Yoto...</p>
+        <p id="yotoProgressEta" class="text-muted text-sm" style="margin-top: 0.25rem;"></p>
+        <button id="cancelUploadBtn" onclick="cancelUpload()" class="btn btn-secondary" style="margin-top: 0.75rem; font-size: 0.75rem; padding: 0.3rem 0.6rem; opacity: 0.7;">
+            Cancel
+        </button>
+    </div>
+
+    <div id="yotoResult" style="display: none;"></div>
+</div>
+
+<div class="text-center mt-2">
+    <a href="/download/results" class="btn btn-secondary">Back to Results</a>
+    <a href="/" class="btn btn-secondary">Start New Playlist</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if yoto_authenticated %}
+<script>
+var newSongsCount = {{ success_count }};
+var existingCards = [];
+var confirmedIconId = '';      // mediaId of accepted icon (public or uploaded)
+var confirmedIconDataUrl = ''; // data URL of generated icon (before upload)
+var confirmedIconPreviewUrl = ''; // URL for display
+var confirmedCoverUrl = '';    // mediaUrl of uploaded cover image
+
+// Fetch existing cards for the dropdown on page load
+(function loadExistingCards() {
+    fetch('/yoto/cards')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.cards && data.cards.length > 0) {
+                existingCards = data.cards;
+                var select = document.getElementById('cardTarget');
+                data.cards.forEach(function(c) {
+                    var opt = document.createElement('option');
+                    opt.value = c.cardId;
+                    opt.textContent = c.title + ' (' + c.trackCount + ' tracks)';
+                    opt.dataset.trackCount = c.trackCount;
+                    opt.dataset.title = c.title;
+                    select.appendChild(opt);
+                });
+            }
+        })
+        .catch(function() { /* ignore — dropdown just shows "Create new" */ });
+})();
+
+function onCardTargetChange() {
+    var select = document.getElementById('cardTarget');
+    var isNew = select.value === 'new';
+    var capacity = document.getElementById('cardCapacity');
+    var iconWrapper = document.getElementById('iconModeWrapper');
+    var btn = document.getElementById('uploadBtn');
+    var nameInput = document.getElementById('cardName');
+
+    if (isNew) {
+        capacity.style.display = 'none';
+        iconWrapper.style.display = '';
+        btn.textContent = 'Upload to Yoto & Create MYO Card';
+        nameInput.value = '';
+        nameInput.placeholder = 'Playlist name (e.g. Bedtime Songs)';
+    } else {
+        var opt = select.options[select.selectedIndex];
+        var trackCount = parseInt(opt.dataset.trackCount) || 0;
+        var available = 100 - trackCount;
+        iconWrapper.style.display = 'none';
+        btn.textContent = 'Upload & Add to Existing Card';
+        nameInput.value = opt.dataset.title || '';
+
+        if (available <= 0) {
+            capacity.textContent = 'This card is full (100/100 tracks). Choose a different card.';
+            capacity.className = 'text-danger text-sm';
+            btn.disabled = true;
+        } else if (newSongsCount > available) {
+            capacity.textContent = 'This card has ' + trackCount + ' tracks with room for ' +
+                available + ' more, but you have ' + newSongsCount +
+                ' songs to add. Some may not fit.';
+            capacity.className = 'text-danger text-sm';
+            btn.disabled = true;
+        } else {
+            capacity.textContent = trackCount + '/100 tracks used — room for ' +
+                available + ' more.';
+            capacity.className = 'text-muted text-sm';
+            btn.disabled = false;
+        }
+        capacity.style.display = '';
+    }
+}
+
+function onIconModeChange() {
+    // Reset icon state when mode changes
+    confirmedIconId = '';
+    confirmedIconDataUrl = '';
+    confirmedIconPreviewUrl = '';
+    document.getElementById('iconConfirmed').style.display = 'none';
+    document.getElementById('iconPreviewSection').style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = '';
+
+    var mode = document.getElementById('iconMode').value;
+    var switchBtn = document.getElementById('iconSwitchBtn');
+    var switchBtnErr = document.getElementById('iconSwitchBtnError');
+    if (mode === 'generate') {
+        switchBtn.textContent = 'Switch to public icon library instead';
+        switchBtnErr.textContent = 'Try public icons instead';
+    } else {
+        switchBtn.textContent = 'Switch to AI-generated icon instead';
+        switchBtnErr.textContent = 'Try generating instead';
+    }
+}
+
+function previewIcon() {
+    var mode = document.getElementById('iconMode').value;
+    var cardName = document.getElementById('cardName').value.trim() || 'My Playlist';
+    var keywords = '';
+
+    _fetchIconPreview(mode, cardName, keywords);
+}
+
+function retryIcon() {
+    var mode = document.getElementById('iconMode').value;
+    var cardName = document.getElementById('cardName').value.trim() || 'My Playlist';
+    _fetchIconPreview(mode, cardName, '');
+}
+
+function retryIconWithKeywords() {
+    var mode = document.getElementById('iconMode').value;
+    var cardName = document.getElementById('cardName').value.trim() || 'My Playlist';
+    var keywords = document.getElementById('iconKeywords').value.trim();
+    _fetchIconPreview(mode, cardName, keywords);
+}
+
+function switchIconMode() {
+    var select = document.getElementById('iconMode');
+    select.value = select.value === 'generate' ? 'public' : 'generate';
+    onIconModeChange();
+    previewIcon();
+}
+
+function _fetchIconPreview(mode, cardName, keywords) {
+    var section = document.getElementById('iconPreviewSection');
+    var loading = document.getElementById('iconPreviewLoading');
+    var result = document.getElementById('iconPreviewResult');
+    var error = document.getElementById('iconPreviewError');
+
+    section.style.display = '';
+    loading.style.display = '';
+    result.style.display = 'none';
+    error.style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = 'none';
+    document.getElementById('iconConfirmed').style.display = 'none';
+
+    loading.querySelector('p').textContent = mode === 'generate'
+        ? 'Generating icon...' : 'Selecting icon...';
+
+    var form = new FormData();
+    form.append('mode', mode);
+    form.append('card_name', cardName);
+    form.append('keywords', keywords);
+
+    fetch('/yoto/icon/preview', { method: 'POST', body: form })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            if (data.error) {
+                error.style.display = '';
+                document.getElementById('iconPreviewErrorMsg').textContent = data.error;
+                return;
+            }
+            result.style.display = '';
+            document.getElementById('iconPreviewImg').src = data.preview;
+            var reason = document.getElementById('iconPreviewReason');
+            if (data.mode === 'public' && data.reason) {
+                reason.textContent = data.reason;
+            } else if (data.mode === 'generate') {
+                reason.textContent = 'AI-generated 16x16 pixel art';
+            } else {
+                reason.textContent = '';
+            }
+
+            // Store for later
+            if (data.mode === 'generate') {
+                confirmedIconDataUrl = data.preview;
+                confirmedIconId = '';
+            } else if (data.iconId) {
+                confirmedIconId = data.iconId;
+                confirmedIconDataUrl = '';
+            }
+            confirmedIconPreviewUrl = data.preview;
+        })
+        .catch(function(err) {
+            loading.style.display = 'none';
+            error.style.display = '';
+            document.getElementById('iconPreviewErrorMsg').textContent = 'Failed: ' + err.message;
+        });
+}
+
+function acceptIcon() {
+    // If it's a generated icon, we need to upload it first to get a mediaId
+    if (confirmedIconDataUrl && !confirmedIconId) {
+        var section = document.getElementById('iconPreviewSection');
+        var loading = document.getElementById('iconPreviewLoading');
+        var result = document.getElementById('iconPreviewResult');
+        loading.style.display = '';
+        loading.querySelector('p').textContent = 'Uploading icon to Yoto...';
+        result.style.display = 'none';
+
+        var form = new FormData();
+        form.append('icon_data_url', confirmedIconDataUrl);
+
+        fetch('/yoto/icon/upload', { method: 'POST', body: form })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                loading.style.display = 'none';
+                if (data.error) {
+                    result.style.display = '';
+                    document.getElementById('iconPreviewErrorMsg').textContent = data.error;
+                    document.getElementById('iconPreviewError').style.display = '';
+                    return;
+                }
+                confirmedIconId = data.iconMediaId;
+                _showConfirmedIcon();
+            })
+            .catch(function(err) {
+                loading.style.display = 'none';
+                result.style.display = '';
+            });
+    } else {
+        _showConfirmedIcon();
+    }
+}
+
+function _showConfirmedIcon() {
+    document.getElementById('iconPreviewSection').style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = 'none';
+    var confirmed = document.getElementById('iconConfirmed');
+    confirmed.style.display = '';
+    document.getElementById('iconConfirmedImg').src = confirmedIconPreviewUrl;
+}
+
+function changeIcon() {
+    confirmedIconId = '';
+    confirmedIconDataUrl = '';
+    confirmedIconPreviewUrl = '';
+    document.getElementById('iconConfirmed').style.display = 'none';
+    document.getElementById('previewIconBtn').style.display = '';
+    document.getElementById('iconPreviewSection').style.display = 'none';
+}
+
+function onCoverSelected(input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    document.getElementById('coverUploadArea').style.display = 'none';
+    document.getElementById('coverUploading').style.display = '';
+
+    var reader = new FileReader();
+    var localPreview = '';
+    reader.onload = function(e) { localPreview = e.target.result; };
+    reader.readAsDataURL(file);
+
+    var form = new FormData();
+    form.append('cover_file', file);
+    fetch('/yoto/cover/upload', { method: 'POST', body: form })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('coverUploading').style.display = 'none';
+            if (data.error) {
+                document.getElementById('coverUploadArea').style.display = '';
+                alert('Cover upload failed: ' + data.error);
+                return;
+            }
+            confirmedCoverUrl = data.coverUrl;
+            document.getElementById('coverConfirmedImg').src = localPreview;
+            document.getElementById('coverConfirmed').style.display = '';
+        })
+        .catch(function(err) {
+            document.getElementById('coverUploading').style.display = 'none';
+            document.getElementById('coverUploadArea').style.display = '';
+            alert('Cover upload failed: ' + err.message);
+        });
+}
+
+function removeCover() {
+    confirmedCoverUrl = '';
+    document.getElementById('coverFileInput').value = '';
+    document.getElementById('coverConfirmed').style.display = 'none';
+    document.getElementById('coverUploadArea').style.display = '';
+}
+
+var uploadStartTime = 0;
+var lastCompletedTrack = 0;
+var trackCompletionTimes = [];
+var currentJobId = null;
+
+function uploadToYoto() {
+    var name = document.getElementById('cardName').value.trim() || 'My Playlist';
+    var iconMode = document.getElementById('iconMode').value;
+    var target = document.getElementById('cardTarget').value;
+    document.getElementById('yotoForm').style.display = 'none';
+    document.getElementById('yotoProgress').style.display = 'block';
+
+    uploadStartTime = Date.now();
+    lastCompletedTrack = 0;
+    trackCompletionTimes = [];
+
+    var form = new FormData();
+    form.append('card_name', name);
+    form.append('icon_mode', iconMode);
+    if (target !== 'new') {
+        form.append('existing_card_id', target);
+    }
+    if (confirmedIconId) {
+        form.append('confirmed_icon_id', confirmedIconId);
+    }
+    if (confirmedCoverUrl) {
+        form.append('cover_image_url', confirmedCoverUrl);
+    }
+
+    fetch('/yoto/upload', { method: 'POST', body: form })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                showUploadError(data.error);
+                return;
+            }
+            if (data.job_id) {
+                currentJobId = data.job_id;
+                pollUploadStatus(data.job_id);
+            }
+        })
+        .catch(function(err) { showUploadError('Upload failed: ' + err.message); });
+}
+
+function formatDuration(ms) {
+    var secs = Math.round(ms / 1000);
+    if (secs < 60) return secs + 's';
+    var mins = Math.floor(secs / 60);
+    secs = secs % 60;
+    return mins + 'm ' + (secs < 10 ? '0' : '') + secs + 's';
+}
+
+function updateEta(current, total) {
+    var etaEl = document.getElementById('yotoProgressEta');
+    if (current <= 0 || total <= 0) { etaEl.textContent = ''; return; }
+
+    // When the server moves to a new track, record a completion
+    if (current > lastCompletedTrack) {
+        trackCompletionTimes.push(Date.now());
+        lastCompletedTrack = current;
+    }
+
+    var elapsed = Date.now() - uploadStartTime;
+
+    // Need at least one completed track transition to estimate
+    if (trackCompletionTimes.length >= 2) {
+        // Average time between track completions
+        var avgPerTrack = (trackCompletionTimes[trackCompletionTimes.length - 1] -
+                          trackCompletionTimes[0]) / (trackCompletionTimes.length - 1);
+        // Remaining = tracks not yet started (current is in-progress)
+        var remaining = total - current;
+        // Add estimated remaining time for the current in-progress track
+        var timeSinceLastCompletion = Date.now() - trackCompletionTimes[trackCompletionTimes.length - 1];
+        var currentTrackRemaining = Math.max(0, avgPerTrack - timeSinceLastCompletion);
+        var etaMs = (remaining * avgPerTrack) + currentTrackRemaining;
+        etaEl.textContent = 'Elapsed: ' + formatDuration(elapsed) +
+            ' · Est. remaining: ~' + formatDuration(etaMs);
+    } else {
+        etaEl.textContent = 'Elapsed: ' + formatDuration(elapsed) +
+            ' · Estimating time remaining...';
+    }
+}
+
+function pollUploadStatus(jobId) {
+    fetch('/yoto/upload/status?job_id=' + encodeURIComponent(jobId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'running' || data.status === 'cancelling') {
+                var text = document.getElementById('yotoProgressText');
+                if (data.cancelling) {
+                    text.textContent = 'Stopping after current track finishes...';
+                    document.getElementById('yotoProgressEta').textContent = '';
+                    document.getElementById('cancelUploadBtn').style.display = 'none';
+                } else if (data.current_title) {
+                    text.textContent = data.current_title;
+                    if (data.current > 0 && data.total > 0) {
+                        updateEta(data.current, data.total);
+                    }
+                }
+                setTimeout(function() { pollUploadStatus(jobId); }, 5000);
+            } else if (data.status === 'done' && data.result) {
+                showUploadResult(data.result);
+            } else if (data.status === 'error' && data.result) {
+                showUploadError(data.result.error || 'Upload failed', data.result.details);
+            } else {
+                showUploadError('Unexpected status: ' + data.status);
+            }
+        })
+        .catch(function() {
+            setTimeout(function() { pollUploadStatus(jobId); }, 5000);
+        });
+}
+
+function cancelUpload() {
+    if (!currentJobId) return;
+    var btn = document.getElementById('cancelUploadBtn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+    fetch('/yoto/upload/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: currentJobId })
+    });
+}
+
+function showUploadResult(data) {
+    document.getElementById('yotoProgress').style.display = 'none';
+    var result = document.getElementById('yotoResult');
+    result.style.display = 'block';
+
+    if (data.success) {
+        var isUpdate = data.updated;
+        var heading = isUpdate ? 'Tracks added to card!' : 'MYO card created!';
+        if (data.cancelled) {
+            heading = isUpdate ? 'Tracks added to card (stopped early)' : 'MYO card created (stopped early)';
+        }
+        var iconMsg = '';
+        if (isUpdate) {
+            iconMsg = '<br>Total tracks on card: ' + (data.totalTracks || data.tracksUploaded);
+        } else {
+            iconMsg = data.iconSet
+                ? '<br>Card icon: set'
+                : '<br>Card icon: none (can be set in Yoto app)';
+        }
+        var trackInfo = 'Tracks uploaded: ' + data.tracksUploaded;
+        if (data.cancelled && data.totalRequested) {
+            trackInfo += ' of ' + data.totalRequested + ' (stopped by user)';
+        }
+        result.innerHTML =
+            '<p class="text-success" style="font-weight: 500; margin-bottom: 0.5rem;">' +
+                heading +
+            '</p>' +
+            '<p class="text-sm text-muted">' +
+                'Card ID: ' + data.cardId + '<br>' +
+                trackInfo + iconMsg + '<br><br>' +
+                'Open the Yoto app to link this playlist to a physical MYO card.' +
+            '</p>';
+    } else {
+        showUploadError(data.error || 'Unknown error');
+    }
+}
+
+function showUploadError(msg, details) {
+    document.getElementById('yotoProgress').style.display = 'none';
+    document.getElementById('yotoForm').style.display = '';
+    var result = document.getElementById('yotoResult');
+    result.style.display = 'block';
+    var html = '<p class="text-danger">' + msg + '</p>';
+    if (details && details.length) {
+        html += '<ul class="text-sm text-muted" style="margin-top: 0.5rem; padding-left: 1.25rem;">';
+        for (var i = 0; i < details.length; i++) {
+            html += '<li>' + details[i] + '</li>';
+        }
+        html += '</ul>';
+    }
+    result.innerHTML = html;
+}
+</script>
+{% endif %}
+{% endblock %}
