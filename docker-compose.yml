@@ -5,6 +5,8 @@ services:
       - "5000:5000"
     volumes:
       - ./downloads:/app/downloads
+    networks:
+      - backend
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - YOTO_CLIENT_ID=${YOTO_CLIENT_ID:-}
@@ -32,7 +34,8 @@ services:
       context: https://github.com/Vasysik/yt-dlp-host.git
     volumes:
       - ytdlp-data:/app/downloads
-      - ytdlp-keys:/app/jsons
+    networks:
+      - backend
     environment:
       - FLASK_APP=src.server:app
       - FLASK_RUN_HOST=0.0.0.0
@@ -40,6 +43,9 @@ services:
     profiles:
       - youtube
 
+networks:
+  backend:
+    driver: bridge
+
 volumes:
   ytdlp-data:
-  ytdlp-keys:

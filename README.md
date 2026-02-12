@@ -99,20 +99,21 @@ Without the `--profile youtube` flag, only the main app starts (no download capa
 
 **Docker volumes and data flow:**
 
-The two containers do **not** share a filesystem — all file transfer happens over HTTP:
+The two containers do **not** share a filesystem — all file transfer happens over HTTP via a shared `backend` bridge network:
 
 1. The sidecar downloads audio into its own internal volume (`ytdlp-data`)
-2. The main app requests the finished file via `GET /files/{path}` over the Docker network
+2. The main app requests the finished file via `GET /files/{path}` over the `backend` network (using the hostname `ytdlp`)
 3. The main app saves the MP3 to the host-mounted `./downloads/` directory
 
-The sidecar uses two named Docker volumes (both persist across container restarts):
+The sidecar uses one named Docker volume (persists across container restarts):
 
 | Volume | Mount path | Purpose |
 |---|---|---|
 | `ytdlp-data` | `/app/downloads` | Temporary storage for downloaded audio inside the sidecar |
-| `ytdlp-keys` | `/app/jsons` | Auth cookies / key data used by yt-dlp (persists across restarts so you don't need to re-authenticate) |
 
-The sidecar automatically cleans up completed downloads after a configurable timeout (default: 10 minutes) via its `CLEANUP_TIME_MINUTES` setting — so the `ytdlp-data` volume does not grow indefinitely. Your final MP3 files end up in `./downloads/` on the host (bind-mounted into the main app container). The sidecar's volumes are internal — you don't need to access them directly.
+The sidecar automatically cleans up completed downloads after a configurable timeout (default: 10 minutes) via its `CLEANUP_TIME_MINUTES` setting — so the volume does not grow indefinitely. Your final MP3 files end up in `./downloads/` on the host (bind-mounted into the main app container). The sidecar's volume is internal — you don't need to access it directly.
+
+Both services are placed on the same `backend` network so the main app can reach the sidecar by hostname (`http://ytdlp:5000`). The sidecar has no ports exposed to the host — it is only accessible from within the Docker network.
 
 **Local fallback (without sidecar):**
 
