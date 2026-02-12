@@ -790,13 +790,45 @@ def yoto_icon_upload():
         return jsonify({"error": f"Icon upload failed: {e}"}), 500
 
 
+# ── Cover Image Upload ─────────────────────────────────────────────
+
+
+@app.route("/yoto/cover/upload", methods=["POST"])
+def yoto_cover_upload():
+    """Upload a cover image to Yoto and return the mediaUrl."""
+    from yoto_client import YotoClient
+
+    client_id = os.environ.get("YOTO_CLIENT_ID", "")
+    if not client_id:
+        return jsonify({"error": "YOTO_CLIENT_ID not configured"}), 400
+
+    client = YotoClient(client_id)
+    if not client.is_authenticated():
+        return jsonify({"error": "Not authenticated"}), 401
+
+    file = request.files.get("cover_file")
+    if not file:
+        return jsonify({"error": "No file provided"}), 400
+
+    content_type = file.content_type or "image/jpeg"
+    image_data = file.read()
+
+    try:
+        result = client.upload_cover_image(image_data, content_type=content_type)
+        media_url = result.get("mediaUrl", "")
+        return jsonify({"coverUrl": media_url})
+    except Exception as e:
+        return jsonify({"error": f"Cover upload failed: {e}"}), 500
+
+
 # ── Yoto Upload (background worker) ────────────────────────────────
 
 
 def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
                     icon_mode: str, client_id: str,
                     existing_card_id: str | None = None,
-                    confirmed_icon_id: str | None = None):
+                    confirmed_icon_id: str | None = None,
+                    cover_image_url: str | None = None):
     """Background thread that uploads tracks to Yoto and creates/updates a card."""
     from yoto_client import YotoClient
 
@@ -894,6 +926,7 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
             card = client.update_myo_card(
                 existing_card_id, card_name, all_tracks,
                 icon_media_id=existing_icon_id,
+                cover_image_url=cover_image_url,
             )
             card_id = card.get("cardId", card.get("_id", "unknown"))
             job["status"] = "done"
@@ -930,7 +963,8 @@ def _run_upload_job(job_id: str, successful: list[dict], card_name: str,
     job["current_title"] = "Creating MYO card..."
 
     try:
-        card = client.create_myo_card(card_name, tracks, icon_media_id=icon_media_id)
+        card = client.create_myo_card(card_name, tracks, icon_media_id=icon_media_id,
+                                     cover_image_url=cover_image_url)
         card_id = card.get("cardId", card.get("_id", "unknown"))
         job["status"] = "done"
         job["result"] = {
@@ -959,6 +993,7 @@ def yoto_upload():
     icon_mode = request.form.get("icon_mode", "public")
     existing_card_id = request.form.get("existing_card_id", "").strip() or None
     confirmed_icon_id = request.form.get("confirmed_icon_id", "").strip() or None
+    cover_image_url = request.form.get("cover_image_url", "").strip() or None
     results = session.get("download_results", [])
     successful = [r for r in results if r["success"]]
 
@@ -987,7 +1022,7 @@ def yoto_upload():
     thread = threading.Thread(
         target=_run_upload_job,
         args=(job_id, successful, card_name, icon_mode, client_id,
-              existing_card_id, confirmed_icon_id),
+              existing_card_id, confirmed_icon_id, cover_image_url),
         daemon=True,
     )
     thread.start()

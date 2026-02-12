@@ -412,7 +412,8 @@ class YotoClient:
     # ── Card/Playlist Creation ──────────────────────────────────────
 
     def create_myo_card(self, title: str, tracks: list[dict],
-                        icon_media_id: str | None = None) -> dict:
+                        icon_media_id: str | None = None,
+                        cover_image_url: str | None = None) -> dict:
         """
         Create a MYO card with the given tracks.
 
@@ -472,6 +473,9 @@ class YotoClient:
             },
         }
 
+        if cover_image_url:
+            payload["cover"] = {"imageL": cover_image_url}
+
         resp = requests.post(
             f"{API_BASE}/content",
             json=payload,
@@ -517,8 +521,34 @@ class YotoClient:
         resp.raise_for_status()
         return resp.json().get("displayIcon", resp.json())
 
+    def upload_cover_image(self, image_data: bytes, content_type: str = "image/jpeg",
+                           auto_convert: bool = True) -> dict:
+        """Upload a cover image for a MYO card.
+
+        Args:
+            image_data: Raw image bytes (JPEG or PNG).
+            content_type: MIME type of the image.
+            auto_convert: If True, Yoto resizes to appropriate cover dimensions.
+
+        Returns:
+            dict with 'mediaId', 'mediaUrl', etc. from the coverImage object.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": content_type,
+        }
+        resp = requests.post(
+            f"{API_BASE}/media/coverImage/user/me/upload",
+            params={"autoconvert": str(auto_convert).lower(), "coverType": "default"},
+            data=image_data,
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return resp.json().get("coverImage", resp.json())
+
     def update_myo_card(self, card_id: str, title: str, tracks: list[dict],
-                        icon_media_id: str | None = None) -> dict:
+                        icon_media_id: str | None = None,
+                        cover_image_url: str | None = None) -> dict:
         """
         Update an existing MYO card by posting with its cardId.
 
@@ -570,6 +600,9 @@ class YotoClient:
                 },
             },
         }
+
+        if cover_image_url:
+            payload["cover"] = {"imageL": cover_image_url}
 
         resp = requests.post(
             f"{API_BASE}/content",

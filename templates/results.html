@@ -171,6 +171,50 @@
                 Preview Icon
             </button>
         </div>
+        <div id="coverWrapper" style="margin-bottom: 0.75rem;">
+            <label class="text-sm text-muted" style="display: block; margin-bottom: 0.35rem;">
+                Cover Image <span style="opacity: 0.5;">(optional)</span>
+            </label>
+            <div id="coverUploadArea" style="border: 1px dashed #334155; border-radius: 8px;
+                    padding: 1rem; text-align: center; cursor: pointer; background: #0f172a;"
+                 onclick="document.getElementById('coverFileInput').click()">
+                <input type="file" id="coverFileInput" accept="image/*"
+                       onchange="onCoverSelected(this)" style="display: none;">
+                <p class="text-muted text-sm" id="coverPlaceholder">Click to upload a cover image</p>
+                <div id="coverPreview" style="display: none;">
+                    <img id="coverPreviewImg" src="" alt="Cover preview"
+                         style="max-width: 120px; max-height: 120px; border-radius: 6px;
+                                border: 1px solid #334155;">
+                    <div style="margin-top: 0.5rem;">
+                        <button onclick="event.stopPropagation(); removeCover()"
+                                class="text-sm" style="color: #94a3b8; background: none; border: none;
+                                cursor: pointer; text-decoration: underline; padding: 0;">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="coverUploading" style="display: none;" class="text-center">
+                <div class="spinner"></div>
+                <p class="text-muted text-sm mt-1">Uploading cover...</p>
+            </div>
+            <div id="coverConfirmed" style="display: none; margin-top: 0.5rem;
+                    padding: 0.5rem 0.75rem; border: 1px solid #22c55e; border-radius: 8px;
+                    background: #0f2a1a;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <img id="coverConfirmedImg" src="" alt="Cover"
+                         style="max-width: 48px; max-height: 48px; border-radius: 4px;">
+                    <div style="flex: 1;">
+                        <p class="text-success text-sm" style="font-weight: 500;">Cover uploaded</p>
+                        <button onclick="removeCover()" class="text-sm"
+                                style="color: #94a3b8; background: none; border: none;
+                                       cursor: pointer; text-decoration: underline; padding: 0;">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <button id="uploadBtn" onclick="uploadToYoto()" class="btn btn-primary btn-block">
             Upload to Yoto &amp; Create MYO Card
         </button>
@@ -413,6 +457,7 @@ var existingCards = [];
 var confirmedIconId = '';      // mediaId of accepted icon (public or uploaded)
 var confirmedIconDataUrl = ''; // data URL of generated icon (before upload)
 var confirmedIconPreviewUrl = ''; // URL for display
+var confirmedCoverUrl = '';    // mediaUrl of uploaded cover image
 
 // Fetch existing cards for the dropdown on page load
 (function loadExistingCards() {
@@ -636,6 +681,50 @@ function changeIcon() {
     document.getElementById('iconPreviewSection').style.display = 'none';
 }
 
+function onCoverSelected(input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('coverPreviewImg').src = e.target.result;
+        document.getElementById('coverPreview').style.display = '';
+        document.getElementById('coverPlaceholder').style.display = 'none';
+        // Upload immediately
+        document.getElementById('coverUploadArea').style.display = 'none';
+        document.getElementById('coverUploading').style.display = '';
+        var form = new FormData();
+        form.append('cover_file', file);
+        fetch('/yoto/cover/upload', { method: 'POST', body: form })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                document.getElementById('coverUploading').style.display = 'none';
+                if (data.error) {
+                    document.getElementById('coverUploadArea').style.display = '';
+                    alert('Cover upload failed: ' + data.error);
+                    return;
+                }
+                confirmedCoverUrl = data.coverUrl;
+                document.getElementById('coverConfirmedImg').src = e.target.result;
+                document.getElementById('coverConfirmed').style.display = '';
+            })
+            .catch(function(err) {
+                document.getElementById('coverUploading').style.display = 'none';
+                document.getElementById('coverUploadArea').style.display = '';
+                alert('Cover upload failed: ' + err.message);
+            });
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeCover() {
+    confirmedCoverUrl = '';
+    document.getElementById('coverFileInput').value = '';
+    document.getElementById('coverPreview').style.display = 'none';
+    document.getElementById('coverPlaceholder').style.display = '';
+    document.getElementById('coverConfirmed').style.display = 'none';
+    document.getElementById('coverUploadArea').style.display = '';
+}
+
 var uploadStartTime = 0;
 var lastCompletedTrack = 0;
 var trackCompletionTimes = [];
@@ -660,6 +749,9 @@ function uploadToYoto() {
     }
     if (confirmedIconId) {
         form.append('confirmed_icon_id', confirmedIconId);
+    }
+    if (confirmedCoverUrl) {
+        form.append('cover_image_url', confirmedCoverUrl);
     }
 
     fetch('/yoto/upload', { method: 'POST', body: form })
