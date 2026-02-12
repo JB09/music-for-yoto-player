@@ -357,7 +357,7 @@ def _finish_rematch():
     session["confirmed_songs"] = session.pop("_saved_confirmed_songs", [])
     session.pop("rematch_query", None)
     session.pop("rematch_index", None)
-    return redirect(url_for("download_results"))
+    return redirect(url_for("finalize"))
 
 
 @app.route("/match", methods=["GET", "POST"])
@@ -494,8 +494,8 @@ def download_start():
     return jsonify(results)
 
 
-@app.route("/download/results")
-def download_results():
+@app.route("/finalize")
+def finalize():
     results = session.get("download_results", [])
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
 
@@ -517,7 +517,7 @@ def yoto_page():
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
 
     if not client_id or success_count == 0:
-        return redirect(url_for("download_results"))
+        return redirect(url_for("finalize"))
 
     client = YotoClient(client_id)
     yoto_authenticated = client.is_authenticated()
