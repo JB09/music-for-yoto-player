@@ -54,7 +54,6 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `MUSIC_PROVIDER` | No | `youtube` (default) or `plex` |
 | `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`). If unset, falls back to local yt-dlp library |
-| `DOWNLOAD_API_KEY` | No | API key for the yt-dlp-host service (if configured) |
 | `PLEX_URL` | For Plex | Plex server URL (e.g. `http://192.168.1.100:32400`) |
 | `PLEX_TOKEN` | For Plex | Plex authentication token |
 | `PLEX_MUSIC_LIBRARY` | No | Plex music library name (default: `Music`) |

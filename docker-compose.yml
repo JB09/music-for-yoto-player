@@ -16,7 +16,6 @@ services:
       - MUSIC_PROVIDER=${MUSIC_PROVIDER:-youtube}
       # YouTube provider: yt-dlp-host sidecar (recommended)
       - DOWNLOAD_SERVICE_URL=${DOWNLOAD_SERVICE_URL:-http://ytdlp:5000}
-      - DOWNLOAD_API_KEY=${DOWNLOAD_API_KEY:-}
       # Plex provider (only if MUSIC_PROVIDER=plex)
       - PLEX_URL=${PLEX_URL:-}
       - PLEX_TOKEN=${PLEX_TOKEN:-}
