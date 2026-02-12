@@ -1,6 +1,6 @@
 # Music for Yoto Player
 
-Download audio (MP3) from YouTube and optionally upload directly to a Yoto Player MYO card.
+Search and download audio (MP3) from multiple music sources and optionally upload directly to a Yoto Player MYO card.
 
 **Two interfaces:**
 - **Web UI** — step-by-step wizard in your browser (Docker or local)
@@ -10,10 +10,14 @@ Download audio (MP3) from YouTube and optionally upload directly to a Yoto Playe
 - **AI Chat** — describe what you want in natural language and Claude generates the song list
 - **Text/Paste** — type or paste song names directly
 
+**Pluggable music providers:**
+- **YouTube** _(default)_ — searches YouTube Music, downloads audio via [yt-dlp-host](https://github.com/Vasysik/yt-dlp-host) sidecar
+- **Plex** — searches your Plex music library, retrieves audio directly from your server
+
 **Then the pipeline runs:**
 1. **Shuffle & Cap** — randomizes the list and limits to 12 songs (configurable)
-2. **Search & Confirm** — searches YouTube Music, you pick the right match for each
-3. **Download** — downloads audio as MP3 via yt-dlp
+2. **Search & Confirm** — searches your chosen music provider, you pick the right match for each
+3. **Download** — retrieves audio as MP3
 4. **Upload to Yoto** _(optional)_ — uploads to Yoto and creates a MYO card playlist
 
 ---
@@ -35,8 +39,8 @@ cd music-scraper-for-yoto-player
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
 
-# 3. Run with Docker Compose
-docker compose up --build
+# 3. Run with Docker Compose (YouTube provider with yt-dlp sidecar)
+docker compose --profile youtube up --build
 ```
 
 Open **http://localhost:5000** in your browser.
@@ -48,9 +52,84 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
+| `MUSIC_PROVIDER` | No | `youtube` (default) or `plex` |
+| `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`). If unset, falls back to local yt-dlp library |
+| `DOWNLOAD_API_KEY` | No | API key for the yt-dlp-host service (if configured) |
+| `PLEX_URL` | For Plex | Plex server URL (e.g. `http://192.168.1.100:32400`) |
+| `PLEX_TOKEN` | For Plex | Plex authentication token |
+| `PLEX_MUSIC_LIBRARY` | No | Plex music library name (default: `Music`) |
 | `YOTO_CLIENT_ID` | For Yoto upload | Yoto Developer API client ID |
 | `YOTO_REDIRECT_URI` | No | Public base URL when behind a reverse proxy or custom domain (e.g. `https://yoto.example.com`). The `/yoto/callback` path is appended automatically. If not set, auto-detected from the request. |
 | `FLASK_SECRET_KEY` | No | Auto-generated if not set. To set manually: `python3 -c "import secrets; print(secrets.token_hex(32))"` and add the output to your `.env` file. A fixed key ensures sessions survive container restarts. |
+
+---
+
+## Music Providers
+
+The app uses a pluggable provider interface to search for and retrieve audio. Set `MUSIC_PROVIDER` in your `.env` to choose which one.
+
+### YouTube Provider (default)
+
+> **Disclaimer:** Downloading audio from YouTube may violate YouTube's Terms of Service and/or copyright law in your jurisdiction. This project does not host, bundle, or distribute any download tools — it delegates to a user-provided sidecar service. **You are solely responsible for how you use this software and for complying with all applicable laws and terms of service.** The authors of this project assume no liability for misuse.
+
+The YouTube provider searches YouTube Music (via [ytmusicapi](https://github.com/sigma67/ytmusicapi)) and retrieves audio via a separate download service.
+
+**Architecture:** Audio downloading is handled by an external sidecar container rather than being built into this app. This separation means:
+
+- This project **does not bundle yt-dlp or any YouTube download code** in its Docker image
+- The download service is a **user-provided, independently-run container** that you choose to operate
+- The recommended sidecar is [yt-dlp-host](https://github.com/Vasysik/yt-dlp-host), a lightweight REST API wrapper around yt-dlp
+
+**How it works:**
+
+1. The app searches YouTube Music for song matches (read-only metadata search)
+2. When you confirm a song, the app sends a download request to the sidecar's REST API
+3. The sidecar downloads and converts the audio to MP3
+4. The app retrieves the MP3 file from the sidecar
+
+**Setup with Docker Compose:**
+
+The included `docker-compose.yml` defines a `ytdlp` service under the `youtube` profile. To start both the app and the sidecar:
+
+```bash
+docker compose --profile youtube up --build
+```
+
+Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points elsewhere or local yt-dlp is installed).
+
+**Local fallback (without sidecar):**
+
+If `DOWNLOAD_SERVICE_URL` is not set, the YouTube provider falls back to using the yt-dlp Python library directly. This requires:
+
+```bash
+pip install yt-dlp
+# Plus ffmpeg on your PATH for MP3 conversion
+```
+
+This fallback is intended for local development. In Docker, ffmpeg is pre-installed in the image so the fallback works, but the sidecar approach is recommended.
+
+### Plex Provider
+
+The Plex provider searches your own Plex Media Server music library and retrieves audio files directly — no external downloads involved.
+
+**Setup:**
+
+```bash
+# In .env
+MUSIC_PROVIDER=plex
+PLEX_URL=http://192.168.1.100:32400
+PLEX_TOKEN=your-plex-token
+PLEX_MUSIC_LIBRARY=Music  # optional, defaults to "Music"
+```
+
+```bash
+# Install the Plex API client
+pip install PlexAPI
+```
+
+The provider searches across track titles and artist names in your library. Audio retrieval copies files directly if already MP3, or requests server-side transcoding to MP3 for other formats (FLAC, etc.).
+
+**Note:** YouTube preview (play button on the match screen) is not available with the Plex provider since tracks are local files, not YouTube videos.
 
 ---
 
@@ -93,7 +172,7 @@ Open **http://localhost:5000**. The wizard walks you through:
 
 1. **Build** — AI chat or paste a song list
 2. **Review** — see the shuffled/capped playlist, reshuffle if needed
-3. **Match** — confirm the YouTube match for each song (one at a time)
+3. **Match** — confirm the song match from your music provider (one at a time)
 4. **Download** — downloads all MP3s
 5. **Yoto** _(optional)_ — upload to Yoto and create a MYO card
 
@@ -161,10 +240,10 @@ AI Chat  OR  Paste songs  OR  songs.txt
   [Shuffle & Cap] → randomize, limit to 12 songs → confirm list
                 │
                 ▼
-  [Phase 1] Search YouTube Music → show top 5 results → you confirm each
+  [Phase 1] Search music provider → show top 5 results → you confirm each
                 │
                 ▼
-  [Phase 2] Download audio via yt-dlp → convert to MP3 (192kbps)
+  [Phase 2] Retrieve audio as MP3 (via sidecar, Plex, or local yt-dlp)
                 │
                 ▼
   [Phase 3] Upload MP3s to Yoto API → create MYO card playlist
@@ -203,27 +282,32 @@ Icon requirements (per [Yoto Developer docs](https://yoto.dev/icons/uploading-ic
 
 ```
 music-scraper-for-yoto-player/
-├── web_app.py          # Flask web UI
-├── templates/          # HTML templates for web UI
-│   ├── base.html       #   Shared layout + styles
-│   ├── index.html      #   Home (choose input mode)
-│   ├── chat.html       #   AI chat interface
-│   ├── text_input.html #   Paste song list
-│   ├── review.html     #   Review shuffled playlist
-│   ├── match.html      #   Confirm YouTube matches
-│   ├── download.html   #   Download progress
-│   ├── finalize.html   #   Finalize playlist (edit, reorder, remove)
-│   └── yoto.html       #   Yoto upload
-├── yoto_scraper.py     # CLI application
-├── playlist_chat.py    # AI chat playlist generator
-├── yoto_client.py      # Yoto API client
-├── icon_selector.py    # AI-powered card icon selection
-├── songs.txt           # Song list (for CLI text mode)
-├── Dockerfile          # Docker image
-├── docker-compose.yml  # Docker Compose config
-├── .env.example        # Environment variable template
-├── requirements.txt    # Python dependencies
-└── downloads/          # Downloaded MP3s
+├── web_app.py              # Flask web UI
+├── music_providers/        # Pluggable music provider interface
+│   ├── __init__.py         #   Factory: get_provider() reads MUSIC_PROVIDER env
+│   ├── base.py             #   Abstract MusicProvider base class
+│   ├── youtube.py          #   YouTube provider (ytmusicapi + yt-dlp-host sidecar)
+│   └── plex.py             #   Plex provider (python-plexapi)
+├── templates/              # HTML templates for web UI
+│   ├── base.html           #   Shared layout + styles
+│   ├── index.html          #   Home (choose input mode)
+│   ├── chat.html           #   AI chat interface
+│   ├── text_input.html     #   Paste song list
+│   ├── review.html         #   Review shuffled playlist
+│   ├── match.html          #   Confirm song matches
+│   ├── download.html       #   Download progress
+│   ├── finalize.html       #   Finalize playlist (edit, reorder, remove)
+│   └── yoto.html           #   Yoto upload
+├── yoto_scraper.py         # CLI application
+├── playlist_chat.py        # AI chat playlist generator
+├── yoto_client.py          # Yoto API client
+├── icon_selector.py        # AI-powered card icon selection
+├── songs.txt               # Song list (for CLI text mode)
+├── Dockerfile              # Docker image
+├── docker-compose.yml      # Docker Compose config (includes yt-dlp-host sidecar)
+├── .env.example            # Environment variable template
+├── requirements.txt        # Python dependencies
+└── downloads/              # Downloaded MP3s
 ```
 
 ## Note on the Physical Card Step
