@@ -165,24 +165,29 @@ function handleFileConflict(e, form, conflictType) {
         titleEl.textContent = 'Similar file found';
         filenameEl.textContent = songData.partial_match;
         messageEl.textContent = 'A file with a similar name already exists. ' +
-            'Selecting this will download as "' + wouldCreate + '". ' +
-            'You can also skip this and use the existing file.';
+            'You can use it, or download this as a new file.';
+
+        var useBtn = document.createElement('button');
+        useBtn.className = 'btn btn-primary';
+        useBtn.style.cssText = 'flex: 1;';
+        useBtn.textContent = 'Use existing file';
+        useBtn.onclick = function() {
+            dialog.style.display = 'none';
+            songData.use_existing = songData.partial_match;
+            songDataInput.value = JSON.stringify(songData);
+            form.querySelector('input[name="action"]').value = 'use_existing';
+            form.submit();
+        };
 
         var dlNewBtn = document.createElement('button');
-        dlNewBtn.className = 'btn btn-primary';
+        dlNewBtn.className = 'btn btn-secondary';
         dlNewBtn.style.cssText = 'flex: 1;';
         dlNewBtn.textContent = 'Download as new file';
         dlNewBtn.onclick = function() { dialog.style.display = 'none'; form.submit(); };
 
-        var skipBtn = document.createElement('button');
-        skipBtn.className = 'btn btn-secondary';
-        skipBtn.style.cssText = 'flex: 1;';
-        skipBtn.textContent = 'Skip (keep existing)';
-        skipBtn.onclick = function() { dialog.style.display = 'none'; };
-
         buttonsEl.style.cssText = 'display: flex; gap: 0.5rem;';
+        buttonsEl.appendChild(useBtn);
         buttonsEl.appendChild(dlNewBtn);
-        buttonsEl.appendChild(skipBtn);
     }
 
     document.getElementById('cancelConflictBtn').onclick = function() {

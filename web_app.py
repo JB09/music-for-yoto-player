@@ -403,6 +403,29 @@ def match_song():
             session["match_index"] = idx + 1
             return redirect(url_for("match_song"))
 
+        elif action == "use_existing":
+            selected = json.loads(request.form.get("song_data", "{}"))
+            existing_file = selected.get("use_existing", "")
+            if existing_file:
+                existing_path = os.path.join(OUTPUT_DIR, existing_file)
+                if is_rematch:
+                    rematch_idx = session["rematch_index"]
+                    results = session.get("download_results", [])
+                    if 0 <= rematch_idx < len(results):
+                        results[rematch_idx] = {
+                            "title": selected["title"],
+                            "artist": selected["artist"],
+                            "success": os.path.exists(existing_path),
+                            "filepath": existing_path,
+                        }
+                        session["download_results"] = results
+                    return _finish_rematch()
+                selected["existing_filepath"] = existing_path
+                confirmed.append(selected)
+                session["confirmed_songs"] = confirmed
+                session["match_index"] = idx + 1
+                return redirect(url_for("match_song"))
+
         elif action == "skip":
             if is_rematch:
                 return _finish_rematch()
@@ -452,9 +475,13 @@ def download_start():
     results = []
 
     for song in confirmed:
-        force = song.get("force_download", False)
-        filepath = download_audio(song["videoId"], song["title"], song["artist"],
-                                  force=force)
+        existing = song.get("existing_filepath")
+        if existing and os.path.exists(existing):
+            filepath = existing
+        else:
+            force = song.get("force_download", False)
+            filepath = download_audio(song["videoId"], song["title"], song["artist"],
+                                      force=force)
         results.append({
             "title": song["title"],
             "artist": song["artist"],
