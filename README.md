@@ -97,6 +97,33 @@ docker compose --profile youtube up --build
 
 Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points elsewhere or local yt-dlp is installed).
 
+**Docker volumes and data flow:**
+
+The two containers do **not** share a filesystem — all file transfer happens over HTTP:
+
+1. The sidecar downloads audio into its own internal volume (`ytdlp-data`)
+2. The main app requests the finished file via `GET /files/{path}` over the Docker network
+3. The main app saves the MP3 to the host-mounted `./downloads/` directory
+
+The sidecar uses two named Docker volumes (both persist across container restarts):
+
+| Volume | Mount path | Purpose |
+|---|---|---|
+| `ytdlp-data` | `/app/downloads` | Temporary storage for downloaded audio inside the sidecar |
+| `ytdlp-keys` | `/app/jsons` | Auth cookies / key data used by yt-dlp (persists across restarts so you don't need to re-authenticate) |
+
+Your final MP3 files end up in `./downloads/` on the host (bind-mounted into the main app container). The sidecar's volumes are internal — you don't need to access them directly.
+
+**Local fallback (without sidecar):**
+
+If `DOWNLOAD_SERVICE_URL` is not set, the YouTube provider falls back to using the yt-dlp Python library directly. This requires:
+
+```bash
+pip install yt-dlp
+# Plus ffmpeg on your PATH for MP3 conversion
+```
+
+This fallback is intended for local development. In Docker, ffmpeg is pre-installed in the image so the fallback works, but the sidecar approach is recommended.
 ### Plex Provider
 
 The Plex provider searches your own Plex Media Server music library and retrieves audio files directly — no external downloads involved.
