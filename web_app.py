@@ -646,6 +646,8 @@ def _yoto_redirect_uri():
     """Build the OAuth callback URL based on the current request."""
     base_url = os.environ.get("YOTO_REDIRECT_URI")
     if base_url:
+        if base_url.rstrip("/").endswith("/yoto/callback"):
+            return base_url.rstrip("/")
         return base_url.rstrip("/") + "/yoto/callback"
     return request.host_url.rstrip("/") + "/yoto/callback"
 
