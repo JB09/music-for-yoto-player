@@ -194,7 +194,7 @@
             Stop &amp; use completed tracks
         </button>
         <p class="text-sm" style="margin-top: 0.75rem; color: #eab308;">
-            Please don't navigate away from this page — you won't be able to return to check the result.
+            This can take a while — perfect time to grab a snack, do a little dance, or stare at this spinner and question your life choices.
         </p>
     </div>
 
@@ -734,7 +734,7 @@ function pollUploadStatus(jobId) {
                         ' of ' + data.total + ': ' + (data.current_title || '');
                     updateEta(data.current, data.total);
                 }
-                setTimeout(function() { pollUploadStatus(jobId); }, 2000);
+                setTimeout(function() { pollUploadStatus(jobId); }, 5000);
             } else if (data.status === 'done' && data.result) {
                 showUploadResult(data.result);
             } else if (data.status === 'error' && data.result) {
@@ -744,7 +744,7 @@ function pollUploadStatus(jobId) {
             }
         })
         .catch(function() {
-            setTimeout(function() { pollUploadStatus(jobId); }, 3000);
+            setTimeout(function() { pollUploadStatus(jobId); }, 5000);
         });
 }
 
