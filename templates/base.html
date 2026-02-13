@@ -30,11 +30,12 @@
         }
         header p { color: #94a3b8; font-size: 0.875rem; }
 
-        /* Progress steps */
+        /* Progress steps — compact numbered pills */
         .steps {
             display: flex;
             justify-content: center;
-            gap: 0.5rem;
+            align-items: center;
+            gap: 0.4rem;
             margin-bottom: 2rem;
         }
         .step {
@@ -44,16 +45,27 @@
             font-size: 0.75rem;
             color: #475569;
         }
-        .step.active { color: #38bdf8; }
-        .step.done { color: #22c55e; }
-        .step-dot {
-            width: 8px; height: 8px;
+        .step-pill {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px; height: 24px;
             border-radius: 50%;
             background: #334155;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #64748b;
         }
-        .step.active .step-dot { background: #38bdf8; }
-        .step.done .step-dot { background: #22c55e; }
-        .step-arrow { color: #334155; }
+        .step.active .step-pill {
+            background: #38bdf8;
+            color: #0f172a;
+        }
+        .step.active .step-label { color: #38bdf8; font-weight: 600; }
+        .step.done .step-pill {
+            background: #22c55e;
+            color: #0f172a;
+        }
+        .step-arrow { color: #334155; font-size: 0.7rem; }
 
         /* Cards */
         .card {
