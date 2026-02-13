@@ -53,7 +53,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `MUSIC_PROVIDER` | No | `youtube` (default) or `plex` |
-| `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`). If unset, falls back to local yt-dlp library |
+| `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`) |
 | `PLEX_URL` | For Plex | Plex server URL (e.g. `http://192.168.1.100:32400`) |
 | `PLEX_TOKEN` | For Plex | Plex authentication token |
 | `PLEX_MUSIC_LIBRARY` | No | Plex music library name (default: `Music`) |
@@ -94,7 +94,7 @@ The included `docker-compose.yml` defines a `ytdlp` service under the `youtube` 
 docker compose --profile youtube up --build
 ```
 
-Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points elsewhere or local yt-dlp is installed).
+Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points to another yt-dlp-host instance).
 
 **Docker volumes and data flow:**
 
@@ -114,16 +114,6 @@ The sidecar automatically cleans up completed downloads after a configurable tim
 
 Both services are placed on the same `backend` network so the main app can reach the sidecar by hostname (`http://ytdlp:5000`). The sidecar has no ports exposed to the host — it is only accessible from within the Docker network.
 
-**Local fallback (without sidecar):**
-
-If `DOWNLOAD_SERVICE_URL` is not set, the YouTube provider falls back to using the yt-dlp Python library directly. This requires:
-
-```bash
-pip install yt-dlp
-# Plus ffmpeg on your PATH for MP3 conversion
-```
-
-This fallback is intended for local development. In Docker, ffmpeg is pre-installed in the image so the fallback works, but the sidecar approach is recommended.
 ### Plex Provider
 
 The Plex provider searches your own Plex Media Server music library and retrieves audio files directly — no external downloads involved.
