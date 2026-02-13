@@ -35,9 +35,10 @@ The fastest way to get running.
 git clone git@github.com:JB09/music-scraper-for-yoto-player.git
 cd music-scraper-for-yoto-player
 
-# 2. Create .env file with your API key
+# 2. Create .env file and configure keys
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and add your ANTHROPIC_API_KEY (for AI chat)
+# and set DOWNLOAD_API_KEY (for YouTube downloads)
 
 # 3. Run with Docker Compose (YouTube provider with yt-dlp sidecar)
 docker compose --profile youtube up --build
@@ -53,6 +54,7 @@ Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `MUSIC_PROVIDER` | No | `youtube` (default) or `plex` |
+| `DOWNLOAD_API_KEY` | For YouTube | API key for the yt-dlp-host sidecar. Generate one with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`) |
 | `PLEX_URL` | For Plex | Plex server URL (e.g. `http://192.168.1.100:32400`) |
 | `PLEX_TOKEN` | For Plex | Plex authentication token |
