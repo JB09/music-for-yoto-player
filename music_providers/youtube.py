@@ -115,7 +115,7 @@ class YouTubeProvider(MusicProvider):
         # Retrieve the file from the sidecar
         try:
             dl_resp = requests.get(
-                f"{self._service_url}/files/{file_path}",
+                f"{self._service_url}{file_path}",
                 headers={"X-API-Key": self._api_key} if self._api_key else {},
                 timeout=120,
                 stream=True,
