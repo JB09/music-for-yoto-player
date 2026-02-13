@@ -1,6 +1,7 @@
 services:
   yoto-scraper:
-    build: .
+    build:
+      context: https://github.com/JB09/music-for-yoto-player.git
     ports:
       - "5000:5000"
     volumes:
