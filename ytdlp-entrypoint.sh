@@ -10,7 +10,6 @@ if [ -n "$DOWNLOAD_API_KEY" ]; then
 {
     "admin": {
         "key": "$DOWNLOAD_API_KEY",
-        "name": "admin",
         "permissions": [
             "create_key", "delete_key", "get_key", "get_keys",
             "get_video", "get_audio", "get_live_video", "get_live_audio", "get_info"
