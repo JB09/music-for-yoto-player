@@ -29,7 +29,8 @@ services:
   # The user chooses to run this service — it is not bundled with this project.
   # See: https://github.com/Vasysik/yt-dlp-host
   ytdlp:
-    image: ghcr.io/vasysik/yt-dlp-host:latest
+    build:
+      context: https://github.com/Vasysik/yt-dlp-host.git
     volumes:
       - ytdlp-data:/app/downloads
     networks:
