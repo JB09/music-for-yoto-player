@@ -34,8 +34,15 @@ services:
       context: https://github.com/Vasysik/yt-dlp-host.git
     volumes:
       - ytdlp-data:/app/downloads
-      - ./ytdlp-entrypoint.sh:/app/entrypoint.sh:ro
-    entrypoint: ["/app/entrypoint.sh"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -n "$$DOWNLOAD_API_KEY" ]; then
+          mkdir -p /app/jsons
+          printf '{"admin":{"key":"%s","permissions":["create_key","delete_key","get_key","get_keys","get_video","get_audio","get_live_video","get_live_audio","get_info"],"memory_quota":5368709120,"memory_usage":[],"last_access":""}}\n' "$$DOWNLOAD_API_KEY" > /app/jsons/api_keys.json
+          echo "yt-dlp-host: API key configured from DOWNLOAD_API_KEY"
+        fi
+        exec flask run --host=0.0.0.0
     networks:
       - backend
     environment:
