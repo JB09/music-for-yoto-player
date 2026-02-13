@@ -12,7 +12,7 @@ Search and download audio (MP3) from multiple music sources and optionally uploa
 
 **Pluggable music providers:**
 - **YouTube** _(default)_ — searches YouTube Music, downloads audio via [yt-dlp-host](https://github.com/Vasysik/yt-dlp-host) sidecar
-- **Plex** — searches your Plex music library, retrieves audio directly from your server
+- **Plex** _(beta)_ — searches your Plex music library, retrieves audio directly from your server
 
 **Then the pipeline runs:**
 1. **Shuffle & Cap** — randomizes the list and limits to 12 songs (configurable)
@@ -115,7 +115,7 @@ The two containers do **not** share a filesystem — all file transfer happens o
 
 Both services are placed on the same `backend` network so the main app can reach the sidecar by hostname (`http://ytdlp:5000`). The sidecar has no ports exposed to the host — it is only accessible from within the Docker network.
 
-### Plex Provider
+### Plex Provider (beta)
 
 The Plex provider searches your own Plex Media Server music library and retrieves audio files directly — no external downloads involved.
 
