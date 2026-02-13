@@ -1,9 +1,5 @@
 FROM python:3.12-slim
 
-# ffmpeg is needed if using the local yt-dlp fallback (no sidecar)
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY requirements.txt .

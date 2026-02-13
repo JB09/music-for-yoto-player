@@ -1,6 +1,5 @@
 """YouTube Music provider — search via ytmusicapi, download via yt-dlp-host sidecar."""
 
-import glob
 import os
 import time
 
@@ -52,9 +51,12 @@ class YouTubeProvider(MusicProvider):
         if not force and os.path.exists(mp3_path):
             return mp3_path
 
-        if self._service_url:
-            return self._download_via_service(track_id, safe_filename)
-        return self._download_via_library(track_id, safe_filename)
+        if not self._service_url:
+            raise RuntimeError(
+                "DOWNLOAD_SERVICE_URL is not set. "
+                "Configure the yt-dlp-host sidecar to download audio."
+            )
+        return self._download_via_service(track_id, safe_filename)
 
     def get_preview_url(self, track_id: str) -> str:
         return f"https://www.youtube-nocookie.com/embed/{track_id}?autoplay=1"
@@ -127,37 +129,3 @@ class YouTubeProvider(MusicProvider):
         except Exception:
             return None
 
-    def _download_via_library(self, track_id: str, safe_filename: str) -> str | None:
-        """Fallback: download directly using the yt-dlp Python library."""
-        try:
-            import yt_dlp
-        except ImportError:
-            raise RuntimeError(
-                "yt-dlp library is not installed and DOWNLOAD_SERVICE_URL is not set. "
-                "Either pip install yt-dlp or configure the yt-dlp-host sidecar."
-            )
-
-        url = f"https://www.youtube.com/watch?v={track_id}"
-        outtmpl = os.path.join(self._output_dir, f"{safe_filename}.%(ext)s")
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }],
-            "outtmpl": outtmpl,
-            "quiet": True,
-            "no_warnings": True,
-        }
-
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-            mp3_path = os.path.join(self._output_dir, f"{safe_filename}.mp3")
-            if os.path.exists(mp3_path):
-                return mp3_path
-            matches = glob.glob(os.path.join(self._output_dir, f"{safe_filename}.*"))
-            return matches[0] if matches else None
-        except Exception:
-            return None
