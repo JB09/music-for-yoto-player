@@ -111,14 +111,7 @@ The two containers do **not** share a filesystem — all file transfer happens o
 1. The sidecar downloads audio into its own internal volume (`ytdlp-data`)
 2. The main app requests the finished file via `GET /files/{path}` over the `backend` network (using the hostname `ytdlp`)
 3. The main app saves the MP3 to the host-mounted `./downloads/` directory
-
-The sidecar uses one named Docker volume (persists across container restarts):
-
-| Volume | Mount path | Purpose |
-|---|---|---|
-| `ytdlp-data` | `/app/downloads` | Temporary storage for downloaded audio inside the sidecar |
-
-The sidecar automatically cleans up completed downloads after a configurable timeout (default: 10 minutes) via its `CLEANUP_TIME_MINUTES` setting — so the volume does not grow indefinitely. Your final MP3 files end up in `./downloads/` on the host (bind-mounted into the main app container). The sidecar's volume is internal — you don't need to access it directly.
+4. The sidecar automatically cleans up completed downloads after a configurable timeout via its `CLEANUP_TIME_MINUTES` setting (default: 10 minutes)
 
 Both services are placed on the same `backend` network so the main app can reach the sidecar by hostname (`http://ytdlp:5000`). The sidecar has no ports exposed to the host — it is only accessible from within the Docker network.
 
