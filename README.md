@@ -24,16 +24,12 @@ Search and download audio (MP3) from multiple music sources and optionally uploa
 
 ## Quick Start (Docker)
 
-The fastest way to get running.
-
-> **Note:** SSH key authentication must be set up with GitHub before cloning.
-> See [GitHub's SSH guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) if you haven't done this yet.
-> Use the SSH clone URL (starts with `git@github.com:`) rather than HTTPS.
+The fastest way to get running — no repository clone needed.
 
 ```bash
-# 1. Clone the repo (use SSH URL)
-git clone git@github.com:JB09/music-scraper-for-yoto-player.git
-cd music-scraper-for-yoto-player
+# 1. Download docker-compose.yml and .env.example
+curl -O https://raw.githubusercontent.com/JB09/music-scraper-for-yoto-player/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/JB09/music-scraper-for-yoto-player/master/.env.example
 
 # 2. Create .env file and configure keys
 cp .env.example .env
@@ -43,6 +39,14 @@ cp .env.example .env
 # 3. Run with Docker Compose (YouTube provider with yt-dlp sidecar)
 docker compose --profile youtube up --build
 ```
+
+> **Alternative:** You can also clone the full repository if you prefer:
+> ```bash
+> git clone git@github.com:JB09/music-scraper-for-yoto-player.git
+> cd music-scraper-for-yoto-player
+> ```
+> SSH key authentication must be set up with GitHub before cloning.
+> See [GitHub's SSH guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) if needed.
 
 Open **http://localhost:5000** in your browser.
 
@@ -97,6 +101,8 @@ docker compose --profile youtube up --build
 ```
 
 Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points to another yt-dlp-host instance).
+
+**yt-dlp-host API key configuration:** The `ytdlp` service uses `dockerfile_inline` to build the [yt-dlp-host](https://github.com/Vasysik/yt-dlp-host) image directly from its GitHub repository and embed an entrypoint script into the image at build time. This entrypoint reads the `DOWNLOAD_API_KEY` from your `.env` file at container startup and writes it into yt-dlp-host's `api_keys.json`, ensuring both containers authenticate with the same key. This approach means you only need the `docker-compose.yml` and `.env` files to run — no repository clone is required. A readable copy of the entrypoint script is kept in [`ytdlp-entrypoint.sh`](ytdlp-entrypoint.sh) for reference.
 
 **Docker volumes and data flow:**
 

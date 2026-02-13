@@ -29,13 +29,44 @@ services:
   # yt-dlp download service (user-provided, handles YouTube audio downloads)
   # The user chooses to run this service — it is not bundled with this project.
   # See: https://github.com/Vasysik/yt-dlp-host
+  #
+  # The dockerfile_inline below builds the yt-dlp-host image from the remote
+  # repo and embeds an entrypoint script that reads DOWNLOAD_API_KEY from the
+  # environment and writes it into yt-dlp-host's api_keys.json at startup.
+  # This means you only need docker-compose.yml and .env — no repo clone needed.
+  # See ytdlp-entrypoint.sh in this repo for a readable version of the script.
   ytdlp:
     build:
       context: https://github.com/Vasysik/yt-dlp-host.git
+      dockerfile_inline: |
+        FROM python:3.12-slim
+        WORKDIR /app
+        COPY . .
+        RUN pip install --no-cache-dir -r requirements.txt
+        RUN printf '#!/bin/sh\n\
+        KEYS_FILE="/app/jsons/api_keys.json"\n\
+        if [ -n "$$DOWNLOAD_API_KEY" ]; then\n\
+            mkdir -p /app/jsons\n\
+            cat > "$$KEYS_FILE" <<ENDOFKEYS\n\
+        {\n\
+            "admin": {\n\
+                "key": "$$DOWNLOAD_API_KEY",\n\
+                "permissions": [\n\
+                    "create_key", "delete_key", "get_key", "get_keys",\n\
+                    "get_video", "get_audio", "get_live_video", "get_live_audio", "get_info"\n\
+                ],\n\
+                "memory_quota": 5368709120,\n\
+                "memory_usage": [],\n\
+                "last_access": ""\n\
+            }\n\
+        }\n\
+        ENDOFKEYS\n\
+            echo "yt-dlp-host: API key configured from DOWNLOAD_API_KEY"\n\
+        fi\n\
+        exec flask run --host=0.0.0.0\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+    entrypoint: ["/app/entrypoint.sh"]
     volumes:
       - ytdlp-data:/app/downloads
-      - ./ytdlp-entrypoint.sh:/app/entrypoint.sh:ro
-    entrypoint: ["/app/entrypoint.sh"]
     networks:
       - backend
     environment:
