@@ -20,9 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The Dockerfile base image is the single source of truth for the Python
+      # version, so a Dependabot image bump moves CI with it automatically.
+      - name: Read Python version from Dockerfile
+        id: pyver
+        run: echo "version=$(grep -oP '^FROM python:\K[0-9]+\.[0-9]+' Dockerfile)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ steps.pyver.outputs.version }}
 
       - name: Install ruff
         run: pip install ruff
@@ -37,20 +43,18 @@ jobs:
         run: ruff check --output-format=github .
 
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # 3.14 matches the Dockerfile base image — keep the two in sync so the
-        # version actually shipped is covered by the test suite.
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
 
+      - name: Read Python version from Dockerfile
+        id: pyver
+        run: echo "version=$(grep -oP '^FROM python:\K[0-9]+\.[0-9]+' Dockerfile)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ steps.pyver.outputs.version }}
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
