@@ -42,9 +42,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.14 matches the Dockerfile base image — keep the two in sync so the
-        # version actually shipped is covered by the test suite.
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        # Only the version we ship. This must match the Dockerfile base image:
+        # Dependabot bumps the image but does NOT touch this list, so when the
+        # base image moves, update this too (and the required-checks rule).
+        python-version: ["3.14"]
     steps:
       - uses: actions/checkout@v7
 
