@@ -52,6 +52,20 @@ Open **http://localhost:5000** in your browser.
 
 Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 
+### Using the pre-built image
+
+Every push to `main` publishes a multi-arch image (amd64 and arm64) to GitHub
+Container Registry, so you can skip the build step:
+
+```bash
+docker pull ghcr.io/jb09/music-for-yoto-player:latest
+```
+
+To use it with Compose, replace the `build:` block of the `yoto-scraper`
+service with `image: ghcr.io/jb09/music-for-yoto-player:latest`. Tagged
+releases (`v1.2.3`) also publish `:1.2.3`, `:1.2` and `:1`, and every build
+gets an immutable `:sha-<short-sha>` tag.
+
 ### Docker environment variables
 
 | Variable | Required | Description |
@@ -228,5 +242,22 @@ music-scraper-for-yoto-player/
 ├── docker-compose.yml      # Docker Compose config (includes yt-dlp-host sidecar)
 ├── .env.example            # Environment variable template
 ├── requirements.txt        # Python dependencies
+├── requirements-dev.txt    # Test/lint dependencies
+├── tests/                  # pytest suite
+├── .github/workflows/      # CI (lint, tests, image build) and GHCR publish
 └── downloads/              # Downloaded MP3s
 ```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+
+pytest          # run the test suite
+ruff check .    # lint
+```
+
+The tests are offline — the music provider, Yoto API and Anthropic API are all
+stubbed, so nothing hits the network and no real credentials are needed. CI
+runs the same commands on Python 3.11, 3.12 and 3.13, plus a Docker image
+build, on every push and pull request.
