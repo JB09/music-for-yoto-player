@@ -40,6 +40,10 @@ cp .env.example .env
 docker compose --profile youtube up --build
 ```
 
+The app itself is pulled as a pre-built image from GitHub Container Registry,
+so there is nothing to compile. The `--build` flag is still needed for the
+`ytdlp` sidecar, which is built from the upstream yt-dlp-host repository.
+
 > **Alternative:** You can also clone the full repository if you prefer:
 > ```bash
 > git clone git@github.com:JB09/music-scraper-for-yoto-player.git
@@ -51,6 +55,20 @@ docker compose --profile youtube up --build
 Open **http://localhost:5000** in your browser.
 
 Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
+
+### Container image
+
+Every push to `main` publishes a multi-arch image (amd64 and arm64) to GitHub
+Container Registry. `docker-compose.yml` uses `:latest`, and `pull_policy:
+always` means each `up` picks up the newest build.
+
+```bash
+docker pull ghcr.io/jb09/music-for-yoto-player:latest
+```
+
+Tagged releases (`v1.2.3`) also publish `:1.2.3`, `:1.2` and `:1`, and every
+build gets an immutable `:sha-<short-sha>` tag — pin to one of those in
+`docker-compose.yml` if you would rather upgrade deliberately.
 
 ### Docker environment variables
 
@@ -228,5 +246,22 @@ music-scraper-for-yoto-player/
 ├── docker-compose.yml      # Docker Compose config (includes yt-dlp-host sidecar)
 ├── .env.example            # Environment variable template
 ├── requirements.txt        # Python dependencies
+├── requirements-dev.txt    # Test/lint dependencies
+├── tests/                  # pytest suite
+├── .github/workflows/      # CI (lint, tests, image build) and GHCR publish
 └── downloads/              # Downloaded MP3s
 ```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+
+pytest          # run the test suite
+ruff check .    # lint
+```
+
+The tests are offline — the music provider, Yoto API and Anthropic API are all
+stubbed, so nothing hits the network and no real credentials are needed. CI
+runs the same commands on Python 3.11, 3.12 and 3.13, plus a Docker image
+build, on every push and pull request.
