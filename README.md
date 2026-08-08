@@ -70,16 +70,6 @@ Tagged releases (`v1.2.3`) also publish `:1.2.3`, `:1.2` and `:1`, and every
 build gets an immutable `:sha-<short-sha>` tag — pin to one of those in
 `docker-compose.yml` if you would rather upgrade deliberately.
 
-**To build from source instead**, replace the `image:` and `pull_policy:`
-lines of the `yoto-scraper` service with:
-
-```yaml
-    build:
-      context: https://github.com/JB09/music-for-yoto-player.git
-```
-
-or, from a local clone, `build: .`
-
 ### Docker environment variables
 
 | Variable | Required | Description |

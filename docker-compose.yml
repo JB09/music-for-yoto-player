@@ -1,9 +1,6 @@
 services:
   yoto-scraper:
     # Pre-built multi-arch image, published to GHCR on every push to main.
-    # To build from source instead, replace this line with:
-    #   build:
-    #     context: https://github.com/JB09/music-for-yoto-player.git
     image: ghcr.io/jb09/music-for-yoto-player:latest
     pull_policy: always
     ports:
