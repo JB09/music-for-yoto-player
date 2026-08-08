@@ -36,9 +36,14 @@ updates:
     commit-message:
       prefix: "ci"
     groups:
+      # Majors are deliberately left out of the group so a breaking action
+      # upgrade arrives as its own reviewable PR instead of being batched in.
       github-actions:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
 
   # Base image in the Dockerfile
   - package-ecosystem: docker
