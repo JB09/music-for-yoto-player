@@ -1,5 +1,5 @@
 ytmusicapi>=1.12.1
-requests>=2.31.0
+requests>=2.34.2
 anthropic>=0.120.2
 flask>=3.0.0
 # Optional: Plex provider (only needed if MUSIC_PROVIDER=plex)
