@@ -40,6 +40,10 @@ cp .env.example .env
 docker compose --profile youtube up --build
 ```
 
+The app itself is pulled as a pre-built image from GitHub Container Registry,
+so there is nothing to compile. The `--build` flag is still needed for the
+`ytdlp` sidecar, which is built from the upstream yt-dlp-host repository.
+
 > **Alternative:** You can also clone the full repository if you prefer:
 > ```bash
 > git clone git@github.com:JB09/music-scraper-for-yoto-player.git
@@ -52,19 +56,29 @@ Open **http://localhost:5000** in your browser.
 
 Downloaded MP3s are saved to the `./downloads/` folder on your host machine.
 
-### Using the pre-built image
+### Container image
 
 Every push to `main` publishes a multi-arch image (amd64 and arm64) to GitHub
-Container Registry, so you can skip the build step:
+Container Registry. `docker-compose.yml` uses `:latest`, and `pull_policy:
+always` means each `up` picks up the newest build.
 
 ```bash
 docker pull ghcr.io/jb09/music-for-yoto-player:latest
 ```
 
-To use it with Compose, replace the `build:` block of the `yoto-scraper`
-service with `image: ghcr.io/jb09/music-for-yoto-player:latest`. Tagged
-releases (`v1.2.3`) also publish `:1.2.3`, `:1.2` and `:1`, and every build
-gets an immutable `:sha-<short-sha>` tag.
+Tagged releases (`v1.2.3`) also publish `:1.2.3`, `:1.2` and `:1`, and every
+build gets an immutable `:sha-<short-sha>` tag — pin to one of those in
+`docker-compose.yml` if you would rather upgrade deliberately.
+
+**To build from source instead**, replace the `image:` and `pull_policy:`
+lines of the `yoto-scraper` service with:
+
+```yaml
+    build:
+      context: https://github.com/JB09/music-for-yoto-player.git
+```
+
+or, from a local clone, `build: .`
 
 ### Docker environment variables
 
