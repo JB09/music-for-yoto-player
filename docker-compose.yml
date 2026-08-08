@@ -1,6 +1,5 @@
 services:
   yoto-scraper:
-    # Pre-built multi-arch image, published to GHCR on every push to main.
     image: ghcr.io/jb09/music-for-yoto-player:latest
     pull_policy: always
     ports:
