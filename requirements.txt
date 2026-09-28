@@ -1,4 +1,4 @@
-ytmusicapi>=1.12.2
+ytmusicapi>=1.12.3
 requests>=2.34.2
 anthropic>=1.6.0
 flask>=3.1.3
