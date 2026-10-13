@@ -76,6 +76,7 @@ build gets an immutable `:sha-<short-sha>` tag — pin to one of those in
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `MUSIC_PROVIDER` | No | `youtube` (default) or `plex` |
+| `CLAUDE_MODEL` | No | Claude model for chat and icon selection. Defaults to the newest Claude Sonnet, looked up from Anthropic's Models API when the app starts handling requests (restart to pick up a new release). Set it to pin a model, e.g. `claude-sonnet-5-5`. |
 | `DOWNLOAD_API_KEY` | For YouTube | API key for the yt-dlp-host sidecar. Generate one with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`) |
 | `PLEX_URL` | For Plex | Plex server URL (e.g. `http://192.168.1.100:32400`) |
@@ -257,7 +258,7 @@ music-scraper-for-yoto-player/
 ├── playlist_chat.py        # AI chat playlist generator
 ├── yoto_client.py          # Yoto API client
 ├── icon_selector.py        # AI-powered card icon selection
-├── claude_text.py          # Shared Claude request helper (model, effort, text extraction)
+├── claude_text.py          # Shared Claude request helper (newest-Sonnet lookup, text extraction)
 ├── songs.txt               # Song list (for CLI text mode)
 ├── Dockerfile              # Docker image
 ├── docker-compose.yml      # Docker Compose config (includes yt-dlp-host sidecar)
