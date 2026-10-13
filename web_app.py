@@ -130,6 +130,8 @@ def get_audio(track_id: str, title: str, artist: str,
 def chat_with_claude(messages: list[dict]) -> str:
     try:
         import anthropic
+
+        from claude_text import ask_claude
     except ImportError:
         return "Error: anthropic package not installed."
 
@@ -151,13 +153,7 @@ def chat_with_claude(messages: list[dict]) -> str:
     )
 
     client = anthropic.Anthropic()
-    response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=1024,
-        system=system_prompt,
-        messages=messages,
-    )
-    return response.content[0].text
+    return ask_claude(client, max_tokens=4096, system=system_prompt, messages=messages)
 
 
 def extract_songs_from_text(text: str) -> list[dict] | None:
@@ -686,12 +682,13 @@ def yoto_cards():
         for c in cards:
             card_id = c.get("cardId", c.get("_id", ""))
             title = c.get("title", "Untitled")
-            # Chapter count from the list endpoint (may be summary only)
-            chapters = c.get("content", {}).get("chapters", [])
+            # /content/mine returns summaries without chapters, so the count
+            # is usually unknown here; the upload job checks real capacity.
+            chapters = c.get("content", {}).get("chapters")
             result.append({
                 "cardId": card_id,
                 "title": title,
-                "trackCount": len(chapters),
+                "trackCount": len(chapters) if chapters is not None else None,
             })
         return jsonify({"cards": result})
     except Exception as e:
