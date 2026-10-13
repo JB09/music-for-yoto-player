@@ -15,6 +15,8 @@ import os
 
 try:
     import anthropic
+
+    from claude_text import ask_claude
 except ImportError:
     anthropic = None
 
@@ -67,12 +69,8 @@ def select_public_icon(public_icons: list[dict], song_titles: list[str],
 
     try:
         client = anthropic.Anthropic()
-        response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text.strip()
+        text = ask_claude(client, max_tokens=1024,
+                          messages=[{"role": "user", "content": prompt}]).strip()
 
         # Extract JSON from response
         start = text.find("{")
@@ -135,12 +133,8 @@ def generate_custom_icon(song_titles: list[str], card_name: str) -> bytes | None
 
     try:
         client = anthropic.Anthropic()
-        response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text
+        text = ask_claude(client, max_tokens=4096,
+                          messages=[{"role": "user", "content": prompt}])
 
         # Extract Python code
         start = text.find("```python")

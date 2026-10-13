@@ -12,6 +12,8 @@ import sys
 
 try:
     import anthropic
+
+    from claude_text import ask_claude
 except ImportError:
     anthropic = None
 
@@ -124,13 +126,8 @@ def chat_playlist() -> list[str]:
         messages.append({"role": "user", "content": user_input})
 
         try:
-            response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=1024,
-                system=SYSTEM_PROMPT,
-                messages=messages,
-            )
-            assistant_text = response.content[0].text
+            assistant_text = ask_claude(client, max_tokens=4096,
+                                        system=SYSTEM_PROMPT, messages=messages)
             messages.append({"role": "assistant", "content": assistant_text})
 
             # Try to extract songs

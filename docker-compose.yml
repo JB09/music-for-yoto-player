@@ -10,6 +10,8 @@ services:
       - backend
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Claude model; empty = newest Claude Sonnet
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-}
       - YOTO_CLIENT_ID=${YOTO_CLIENT_ID:-}
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-}
       - OUTPUT_DIR=/app/downloads
@@ -31,50 +33,40 @@ services:
   # The user chooses to run this service — it is not bundled with this project.
   # See: https://github.com/Vasysik/yt-dlp-host
   #
-  # The dockerfile_inline below builds the yt-dlp-host image from the remote
-  # repo and embeds an entrypoint script that reads DOWNLOAD_API_KEY from the
-  # environment and writes it into yt-dlp-host's api_keys.json at startup.
-  # This means you only need docker-compose.yml and .env — no repo clone needed.
-  # See ytdlp-entrypoint.sh in this repo for a readable version of the script.
+  # Built from the upstream repo's own Dockerfile (Python slim + ffmpeg + Deno,
+  # which yt-dlp needs for YouTube). Pinned to a commit so an upstream rewrite
+  # can't break the build; bump it to pick up newer releases. yt-dlp-host runs
+  # as two processes: the API (ytdlp) and the downloader (ytdlp-worker), which
+  # share state and files through the volumes below.
+  # The admin key is created from DOWNLOAD_API_KEY on first start.
   ytdlp:
     build:
-      context: https://github.com/Vasysik/yt-dlp-host.git
-      dockerfile_inline: |
-        FROM python:3.12-slim
-        RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
-        WORKDIR /app
-        COPY . .
-        RUN pip install --no-cache-dir -r requirements.txt
-        RUN printf '#!/bin/sh\n\
-        KEYS_FILE="/app/jsons/api_keys.json"\n\
-        if [ -n "$$DOWNLOAD_API_KEY" ]; then\n\
-            mkdir -p /app/jsons\n\
-            cat > "$$KEYS_FILE" <<ENDOFKEYS\n\
-        {\n\
-            "admin": {\n\
-                "key": "$$DOWNLOAD_API_KEY",\n\
-                "permissions": [\n\
-                    "create_key", "delete_key", "get_key", "get_keys",\n\
-                    "get_video", "get_audio", "get_live_video", "get_live_audio", "get_info"\n\
-                ],\n\
-                "memory_quota": 5368709120,\n\
-                "memory_usage": [],\n\
-                "last_access": ""\n\
-            }\n\
-        }\n\
-        ENDOFKEYS\n\
-            echo "yt-dlp-host: API key configured from DOWNLOAD_API_KEY"\n\
-        fi\n\
-        exec flask run --host=0.0.0.0\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
-    entrypoint: ["/app/entrypoint.sh"]
-    volumes:
-      - ytdlp-data:/app/downloads
+      context: https://github.com/Vasysik/yt-dlp-host.git#d672d8f903d600d3d339b82afa381ccd896afc82
+    image: yoto-ytdlp:local
+    pull_policy: build
+    volumes: &ytdlp-volumes
+      - ytdlp-state:/app/data
+      - ytdlp-files:/app/downloads
     networks:
       - backend
-    environment:
-      - FLASK_APP=src.server:app
-      - FLASK_RUN_HOST=0.0.0.0
-      - DOWNLOAD_API_KEY=${DOWNLOAD_API_KEY:-}
+    environment: &ytdlp-env
+      - ADMIN_API_KEY=${DOWNLOAD_API_KEY:-}
+      - STORAGE_BACKEND=sqlite
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    profiles:
+      - youtube
+
+  ytdlp-worker:
+    image: yoto-ytdlp:local
+    pull_policy: never
+    command: ["python", "-m", "yt_dlp_host.worker"]
+    depends_on:
+      - ytdlp
+    volumes: *ytdlp-volumes
+    networks:
+      - backend
+    environment: *ytdlp-env
     restart: unless-stopped
     profiles:
       - youtube
@@ -84,4 +76,5 @@ networks:
     driver: bridge
 
 volumes:
-  ytdlp-data:
+  ytdlp-state:
+  ytdlp-files:

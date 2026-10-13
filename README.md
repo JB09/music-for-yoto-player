@@ -76,6 +76,7 @@ build gets an immutable `:sha-<short-sha>` tag — pin to one of those in
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For AI Chat | Anthropic API key for Claude |
 | `MUSIC_PROVIDER` | No | `youtube` (default) or `plex` |
+| `CLAUDE_MODEL` | No | Claude model for chat and icon selection. Defaults to the newest Claude Sonnet, looked up from Anthropic's Models API when the app starts handling requests (restart to pick up a new release). Set it to pin a model, e.g. `claude-sonnet-5-5`. |
 | `DOWNLOAD_API_KEY` | For YouTube | API key for the yt-dlp-host sidecar. Generate one with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `DOWNLOAD_SERVICE_URL` | No | URL of yt-dlp-host sidecar (default: `http://ytdlp:5000`) |
 | `PLEX_URL` | For Plex | Plex server URL (e.g. `http://192.168.1.100:32400`) |
@@ -112,7 +113,7 @@ The YouTube provider searches YouTube Music (via [ytmusicapi](https://github.com
 
 **Setup with Docker Compose:**
 
-The included `docker-compose.yml` defines a `ytdlp` service under the `youtube` profile. To start both the app and the sidecar:
+The included `docker-compose.yml` defines the sidecar as two services under the `youtube` profile: `ytdlp` (the API) and `ytdlp-worker` (the downloader). To start the app and the sidecar:
 
 ```bash
 docker compose --profile youtube up --build
@@ -120,18 +121,20 @@ docker compose --profile youtube up --build
 
 Without the `--profile youtube` flag, only the main app starts (no download capability unless `DOWNLOAD_SERVICE_URL` points to another yt-dlp-host instance).
 
-**yt-dlp-host API key configuration:** The `ytdlp` service uses `dockerfile_inline` to build the [yt-dlp-host](https://github.com/Vasysik/yt-dlp-host) image directly from its GitHub repository and embed an entrypoint script into the image at build time. This entrypoint reads the `DOWNLOAD_API_KEY` from your `.env` file at container startup and writes it into yt-dlp-host's `api_keys.json`, ensuring both containers authenticate with the same key. This approach means you only need the `docker-compose.yml` and `.env` files to run — no repository clone is required. A readable copy of the entrypoint script is kept in [`ytdlp-entrypoint.sh`](ytdlp-entrypoint.sh) for reference.
+**How the sidecar is built:** The `ytdlp` service builds [yt-dlp-host](https://github.com/Vasysik/yt-dlp-host) straight from its GitHub repository using the project's own Dockerfile (Python slim, ffmpeg, and [Deno](https://deno.land), which yt-dlp needs to download from YouTube). The build is pinned to a specific commit so an upstream change can't break it; bump the commit in `docker-compose.yml` to pick up newer releases, then rebuild with `docker compose build --no-cache ytdlp`. You only need `docker-compose.yml` and `.env` to run it — no clone of either repository is required.
+
+**yt-dlp-host API key configuration:** On first start, yt-dlp-host creates its admin key from `ADMIN_API_KEY`, which the compose file sets to your `DOWNLOAD_API_KEY`, so both containers authenticate with the same key. The key is stored in the `ytdlp-state` volume; to change it later, remove that volume (`docker volume rm <project>_ytdlp-state`) and restart.
 
 **Docker volumes and data flow:**
 
-The two containers do **not** share a filesystem — all file transfer happens over HTTP via a shared `backend` bridge network:
+The app and the sidecar do **not** share a filesystem — all file transfer happens over HTTP via a shared `backend` bridge network:
 
-1. The sidecar downloads audio into its own internal volume (`ytdlp-data`)
+1. The `ytdlp-worker` container downloads audio into the sidecar's `ytdlp-files` volume (shared with `ytdlp`; task state lives in `ytdlp-state`)
 2. The main app requests the finished file via `GET /files/{path}` over the `backend` network (using the hostname `ytdlp`)
 3. The main app saves the MP3 to the host-mounted `./downloads/` directory
-4. The sidecar automatically cleans up completed downloads after a configurable timeout via its `CLEANUP_TIME_MINUTES` setting (default: 10 minutes)
+4. The sidecar automatically cleans up completed downloads after a configurable timeout via its `TASK_RETENTION_MINUTES` setting (default: 10 minutes)
 
-Both services are placed on the same `backend` network so the main app can reach the sidecar by hostname (`http://ytdlp:5000`). The sidecar has no ports exposed to the host — it is only accessible from within the Docker network.
+All three services are placed on the same `backend` network so the main app can reach the sidecar by hostname (`http://ytdlp:5000`). The sidecar has no ports exposed to the host — it is only accessible from within the Docker network.
 
 ### Plex Provider (beta)
 
@@ -255,6 +258,7 @@ music-scraper-for-yoto-player/
 ├── playlist_chat.py        # AI chat playlist generator
 ├── yoto_client.py          # Yoto API client
 ├── icon_selector.py        # AI-powered card icon selection
+├── claude_text.py          # Shared Claude request helper (newest-Sonnet lookup, text extraction)
 ├── songs.txt               # Song list (for CLI text mode)
 ├── Dockerfile              # Docker image
 ├── docker-compose.yml      # Docker Compose config (includes yt-dlp-host sidecar)

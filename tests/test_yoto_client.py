@@ -258,6 +258,29 @@ class TestLoopbackLogin:
         assert client.authenticate() is False
 
 
+def test_list_myo_cards_uses_content_mine(client, monkeypatch):
+    seen = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"cards": [{"cardId": "abc", "title": "T"}]}
+
+    def fake_get(url, **kwargs):
+        seen["url"] = url
+        seen.update(kwargs)
+        return FakeResp()
+
+    client.access_token = "tok"
+    client.expires_at = time.time() + 3600
+    monkeypatch.setattr(yoto_client.requests, "get", fake_get)
+    assert client.list_myo_cards() == [{"cardId": "abc", "title": "T"}]
+    assert seen["url"] == f"{yoto_client.API_BASE}/content/mine"
+    assert "params" not in seen
+
+
 def test_scopes_are_explicit():
     scopes = yoto_client.SCOPES.split()
     assert "user:content:manage" in scopes

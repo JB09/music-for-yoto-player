@@ -656,10 +656,9 @@ class YotoClient:
     # ── Utilities ───────────────────────────────────────────────────
 
     def list_myo_cards(self) -> list[dict]:
-        """List the user's existing MYO cards."""
+        """List the user's existing MYO cards (summaries, without chapters)."""
         resp = requests.get(
-            f"{API_BASE}/content",
-            params={"type": "myo"},
+            f"{API_BASE}/content/mine",
             headers=self._headers(),
         )
         resp.raise_for_status()
