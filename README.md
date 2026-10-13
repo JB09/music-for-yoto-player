@@ -178,7 +178,6 @@ See **[CLI.md](CLI.md)** for full CLI documentation, including all commands, opt
 2. Create a **public client** with scopes in the Yoto Developers dashboard and copy its **Client ID**. Enable these scopes:
    - `user:content:manage` (create MYO cards and upload icons)
    - `offline_access` (refresh tokens, so you only sign in once)
-   - `profile`
 3. Pass it via `--yoto` flag (CLI) or `YOTO_CLIENT_ID` env var (Docker/Web)
 
 > **Note:** Yoto disables client IDs without scopes after **30 November 2026**. If your client ID predates scopes, create a new one as above, update `YOTO_CLIENT_ID`, and retire the old one. You'll be asked to sign in again once.

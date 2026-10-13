@@ -28,7 +28,7 @@ TOKEN_FILE = Path.home() / ".yoto-scraper-tokens.json"
 # Scopes needed for MYO upload. user:content:manage covers creating/editing
 # MYO content and uploading custom icons (it includes user:icons:manage).
 # Yoto disables client IDs without scopes after 30 November 2026.
-SCOPES = "openid profile offline_access user:content:manage"
+SCOPES = "offline_access user:content:manage"
 AUDIENCE = "https://api.yotoplay.com"
 
 # Loopback redirect for the CLI login. Register this exact URL as an allowed
