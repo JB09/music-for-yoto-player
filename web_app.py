@@ -615,17 +615,19 @@ def _yoto_redirect_uri():
 @app.route("/yoto/auth")
 def yoto_auth():
     """Start the Yoto OAuth Authorization Code flow."""
-    from yoto_client import YotoClient
+    from yoto_client import YotoClient, generate_pkce_pair
 
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
     if not client_id:
         return "YOTO_CLIENT_ID not configured", 400
 
     state = secrets.token_urlsafe(32)
+    verifier, challenge = generate_pkce_pair()
     session["yoto_oauth_state"] = state
+    session["yoto_pkce_verifier"] = verifier
 
     client = YotoClient(client_id)
-    authorize_url = client.get_authorize_url(_yoto_redirect_uri(), state)
+    authorize_url = client.get_authorize_url(_yoto_redirect_uri(), state, challenge)
     return redirect(authorize_url)
 
 
@@ -651,9 +653,10 @@ def yoto_callback():
 
     client_id = os.environ.get("YOTO_CLIENT_ID", "")
     client = YotoClient(client_id)
+    verifier = session.pop("yoto_pkce_verifier", None)
 
     try:
-        client.exchange_code(code, _yoto_redirect_uri())
+        client.exchange_code(code, _yoto_redirect_uri(), verifier)
     except Exception as e:
         return f"Token exchange failed: {e}", 500
 

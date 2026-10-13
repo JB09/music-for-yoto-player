@@ -35,6 +35,8 @@ python yoto_scraper.py --chat --yoto YOUR_CLIENT_ID
 python yoto_scraper.py --chat --yoto YOUR_CLIENT_ID --card-name "Bedtime Songs"
 ```
 
+The first upload opens your browser to sign in to Yoto. Make sure `http://127.0.0.1:8787/callback` is registered as a callback URL for your client ID (see the [README](README.md#setting-up-yoto-api-access)).
+
 ## All CLI options
 
 ```
