@@ -1,18 +1,23 @@
 """
 Yoto API client for uploading audio and creating MYO cards.
 
-Handles OAuth2 authentication (device-code flow for CLI, authorization-code
-flow for web), audio upload with transcoding, and MYO card/playlist creation
+Handles OAuth2 authentication (authorization-code + PKCE flow, using a
+loopback redirect for the CLI and the app's callback route for the web UI),
+audio upload with transcoding, and MYO card/playlist creation
 via the official Yoto Developer API.
 
 API docs: https://yoto.dev/api/
 """
 
+import base64
 import hashlib
 import json
+import secrets
 import time
 import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 
@@ -20,9 +25,26 @@ AUTH_BASE = "https://login.yotoplay.com"
 API_BASE = "https://api.yotoplay.com"
 TOKEN_FILE = Path.home() / ".yoto-scraper-tokens.json"
 
-# Scopes needed for MYO upload
-SCOPES = "profile offline_access openid"
+# Scopes needed for MYO upload. user:content:manage covers creating/editing
+# MYO content and uploading custom icons (it includes user:icons:manage).
+# Yoto disables client IDs without scopes after 30 November 2026.
+SCOPES = "offline_access user:content:manage"
 AUDIENCE = "https://api.yotoplay.com"
+
+# Loopback redirect for the CLI login. Register this exact URL as an allowed
+# callback in the Yoto developer dashboard.
+LOOPBACK_HOST = "127.0.0.1"
+LOOPBACK_PORT = 8787
+LOOPBACK_REDIRECT_URI = f"http://{LOOPBACK_HOST}:{LOOPBACK_PORT}/callback"
+LOGIN_TIMEOUT = 300
+
+
+def generate_pkce_pair() -> tuple[str, str]:
+    """Return a (code_verifier, code_challenge) pair for PKCE (S256)."""
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return verifier, challenge
 
 
 class YotoClient:
@@ -78,60 +100,71 @@ class YotoClient:
         return False
 
     def authenticate(self) -> bool:
-        """Run the OAuth2 device-code flow (interactive, opens browser)."""
-        # Step 1: Request device code
-        resp = requests.post(f"{AUTH_BASE}/oauth/device/code", json={
-            "client_id": self.client_id,
-            "scope": SCOPES,
-            "audience": AUDIENCE,
-        })
-        resp.raise_for_status()
-        data = resp.json()
+        """Run the browser login with a loopback redirect (interactive).
 
-        device_code = data["device_code"]
-        user_code = data["user_code"]
-        verification_url = data.get("verification_uri_complete", data["verification_uri"])
-        interval = data.get("interval", 5)
-        expires_in = data.get("expires_in", 900)
+        Starts a temporary local server on LOOPBACK_REDIRECT_URI, sends the
+        user to Yoto's login page, then exchanges the returned code (with the
+        PKCE verifier) for tokens.
+        """
+        verifier, challenge = generate_pkce_pair()
+        state = secrets.token_urlsafe(32)
+        result: dict = {}
 
-        # Prompt user to authorize
-        print(f"\n  To authorize, visit: {verification_url}")
-        print(f"  Your code: {user_code}")
-        print(f"  (Attempting to open browser automatically...)")
-        webbrowser.open(verification_url)
+        class CallbackHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                parsed = urlparse(self.path)
+                if parsed.path != "/callback":
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                result.update({k: v[0] for k, v in parse_qs(parsed.query).items()})
+                ok = "code" in result and result.get("state") == state
+                body = ("Login complete! You can close this tab and return to your terminal."
+                        if ok else "Login failed. Check your terminal for details.")
+                self.send_response(200 if ok else 400)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(body.encode("utf-8"))
 
-        # Step 2: Poll for token
-        deadline = time.time() + expires_in
-        while time.time() < deadline:
-            time.sleep(interval)
-            resp = requests.post(f"{AUTH_BASE}/oauth/token", json={
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-                "client_id": self.client_id,
-                "device_code": device_code,
-            })
+            def log_message(self, format, *args):
+                pass
 
-            if resp.status_code == 200:
-                token_data = resp.json()
-                self.access_token = token_data["access_token"]
-                self.refresh_token = token_data.get("refresh_token")
-                self.expires_at = time.time() + token_data.get("expires_in", 86400)
-                self._save_tokens()
-                print("  Authentication successful!")
-                return True
+        try:
+            server = HTTPServer((LOOPBACK_HOST, LOOPBACK_PORT), CallbackHandler)
+        except OSError as e:
+            print(f"  Could not start login server on port {LOOPBACK_PORT}: {e}")
+            return False
 
-            error = resp.json().get("error", "")
-            if error == "authorization_pending":
-                print("  Waiting for authorization...", end="\r", flush=True)
-                continue
-            if error == "slow_down":
-                interval += 2
-                continue
-            if error in ("expired_token", "access_denied"):
-                print(f"  Authorization failed: {error}")
-                return False
+        authorize_url = self.get_authorize_url(LOOPBACK_REDIRECT_URI, state, challenge)
+        print(f"\n  To sign in, open this URL in your browser:\n  {authorize_url}")
+        print("  (Attempting to open browser automatically...)")
+        webbrowser.open(authorize_url)
 
-        print("  Authorization timed out.")
-        return False
+        server.timeout = 1
+        deadline = time.time() + LOGIN_TIMEOUT
+        try:
+            while not result and time.time() < deadline:
+                server.handle_request()
+        finally:
+            server.server_close()
+
+        if not result:
+            print("  Authorization timed out.")
+            return False
+        if "error" in result:
+            print(f"  Authorization failed: {result.get('error_description', result['error'])}")
+            return False
+        if result.get("state") != state or "code" not in result:
+            print("  Authorization failed: invalid callback (state mismatch).")
+            return False
+
+        try:
+            self.exchange_code(result["code"], LOOPBACK_REDIRECT_URI, verifier)
+        except requests.RequestException as e:
+            print(f"  Token exchange failed: {e}")
+            return False
+        print("  Authentication successful!")
+        return True
 
     def _refresh(self) -> bool:
         """Refresh the access token using the stored refresh token."""
@@ -160,14 +193,15 @@ class YotoClient:
 
     # ── Authorization Code Flow (for web apps) ───────────────────────
 
-    def get_authorize_url(self, redirect_uri: str, state: str) -> str:
+    def get_authorize_url(self, redirect_uri: str, state: str,
+                          code_challenge: str | None = None) -> str:
         """
         Build the authorization URL for the Authorization Code flow.
 
         The user's browser should be redirected to this URL. After login,
         Yoto redirects back to redirect_uri with ?code=...&state=...
+        Pass a PKCE code_challenge (see generate_pkce_pair) for public clients.
         """
-        from urllib.parse import urlencode
         params = {
             "response_type": "code",
             "client_id": self.client_id,
@@ -176,21 +210,28 @@ class YotoClient:
             "audience": AUDIENCE,
             "state": state,
         }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
         return f"{AUTH_BASE}/authorize?{urlencode(params)}"
 
-    def exchange_code(self, code: str, redirect_uri: str) -> bool:
+    def exchange_code(self, code: str, redirect_uri: str,
+                      code_verifier: str | None = None) -> bool:
         """
         Exchange an authorization code for access + refresh tokens.
 
         Called from the OAuth callback handler after the user authorizes.
         Returns True on success.
         """
-        resp = requests.post(f"{AUTH_BASE}/oauth/token", json={
+        payload = {
             "grant_type": "authorization_code",
             "client_id": self.client_id,
             "code": code,
             "redirect_uri": redirect_uri,
-        })
+        }
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
+        resp = requests.post(f"{AUTH_BASE}/oauth/token", json=payload)
         resp.raise_for_status()
         data = resp.json()
         self.access_token = data["access_token"]

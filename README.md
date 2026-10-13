@@ -175,8 +175,14 @@ See **[CLI.md](CLI.md)** for full CLI documentation, including all commands, opt
 ## Setting Up Yoto API Access
 
 1. Go to [yoto.dev/get-started](https://yoto.dev/get-started/start-here/) and register for a developer account
-2. Obtain your **Client ID** from the Yoto Developers portal
+2. Create a **public client** with scopes in the Yoto Developers dashboard and copy its **Client ID**. Enable these scopes:
+   - `user:content:manage` (create MYO cards and upload icons)
+   - `offline_access` (refresh tokens, so you only sign in once)
 3. Pass it via `--yoto` flag (CLI) or `YOTO_CLIENT_ID` env var (Docker/Web)
+
+> **Note:** Yoto disables client IDs without scopes after **30 November 2026**. If your client ID predates scopes, create a new one as above, update `YOTO_CLIENT_ID`, and retire the old one. You'll be asked to sign in again once.
+
+Both the CLI and the Web UI sign in with the OAuth Authorization Code flow with PKCE. The old device-code flow is deprecated by Yoto and no longer used.
 
 ### Callback URL Configuration (Web UI)
 
@@ -197,6 +203,14 @@ If the app runs behind a reverse proxy (e.g. `https://yoto.example.com`), the au
 
 ```bash
 YOTO_REDIRECT_URI=https://yoto.example.com
+```
+
+### Callback URL Configuration (CLI)
+
+The CLI opens your browser to sign in and catches the result on a temporary local server. Add this callback URL in the Yoto Developer portal as well:
+
+```
+http://127.0.0.1:8787/callback
 ```
 
 Tokens are saved to `~/.yoto-scraper-tokens.json` and reused across sessions.

@@ -1,5 +1,6 @@
 """Tests for YotoClient: token handling, auth URLs and file helpers."""
 
+import base64
 import hashlib
 import json
 import time
@@ -153,6 +154,114 @@ class TestGetAuthorizeUrl:
         assert parse_qs(urlparse(url).query)["redirect_uri"] == [
             "https://app.example/cb?x=1&y=2"
         ]
+
+
+class TestPkce:
+    def test_challenge_is_s256_of_verifier(self):
+        verifier, challenge = yoto_client.generate_pkce_pair()
+        expected = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode()).digest()
+        ).rstrip(b"=").decode()
+        assert challenge == expected
+        assert 43 <= len(verifier) <= 128
+
+    def test_pairs_are_random(self):
+        assert yoto_client.generate_pkce_pair() != yoto_client.generate_pkce_pair()
+
+    def test_authorize_url_includes_challenge(self, client):
+        url = client.get_authorize_url("https://app.example/cb", "s", "chal")
+        params = parse_qs(urlparse(url).query)
+        assert params["code_challenge"] == ["chal"]
+        assert params["code_challenge_method"] == ["S256"]
+
+    def test_authorize_url_omits_challenge_when_not_given(self, client):
+        params = parse_qs(urlparse(client.get_authorize_url("https://a/cb", "s")).query)
+        assert "code_challenge" not in params
+
+    def test_exchange_code_sends_verifier(self, client, monkeypatch):
+        sent = {}
+
+        class FakeResp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"access_token": "a", "refresh_token": "r", "expires_in": 60}
+
+        def fake_post(url, json):
+            sent.update(json)
+            return FakeResp()
+
+        monkeypatch.setattr(yoto_client.requests, "post", fake_post)
+        assert client.exchange_code("code1", "https://a/cb", "verif") is True
+        assert sent["code_verifier"] == "verif"
+        assert sent["grant_type"] == "authorization_code"
+        assert client.access_token == "a"
+
+
+class TestLoopbackLogin:
+    @pytest.fixture
+    def free_port(self, monkeypatch):
+        import socket
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        monkeypatch.setattr(yoto_client, "LOOPBACK_PORT", port)
+        monkeypatch.setattr(yoto_client, "LOOPBACK_REDIRECT_URI",
+                            f"http://127.0.0.1:{port}/callback")
+        return port
+
+    def _simulate_browser(self, monkeypatch, port, **override):
+        """Patch webbrowser.open to hit the loopback callback like Yoto would."""
+        import contextlib
+        import threading
+        import urllib.error
+        import urllib.request
+
+        def fake_open(url):
+            state = parse_qs(urlparse(url).query)["state"][0]
+            query = {"code": "the-code", "state": state, **override}
+            target = f"http://127.0.0.1:{port}/callback?" + "&".join(
+                f"{k}={v}" for k, v in query.items())
+
+            def hit():
+                # The handler answers 400 for rejected callbacks; that's expected.
+                with contextlib.suppress(urllib.error.URLError):
+                    urllib.request.urlopen(target, timeout=5).read()
+            threading.Thread(target=hit, daemon=True).start()
+
+        monkeypatch.setattr(yoto_client.webbrowser, "open", fake_open)
+
+    def test_successful_login_exchanges_code_with_verifier(self, client, monkeypatch, free_port):
+        self._simulate_browser(monkeypatch, free_port)
+        calls = []
+
+        def fake_exchange(code, redirect_uri, code_verifier=None):
+            calls.append((code, redirect_uri, code_verifier))
+            return True
+
+        monkeypatch.setattr(client, "exchange_code", fake_exchange)
+        assert client.authenticate() is True
+        assert calls == [("the-code", yoto_client.LOOPBACK_REDIRECT_URI, calls[0][2])]
+        assert calls[0][2]  # PKCE verifier was sent
+
+    def test_state_mismatch_is_rejected(self, client, monkeypatch, free_port):
+        self._simulate_browser(monkeypatch, free_port, state="forged")
+        monkeypatch.setattr(client, "exchange_code",
+                            lambda *a, **k: pytest.fail("must not exchange"))
+        assert client.authenticate() is False
+
+    def test_error_from_yoto_is_reported(self, client, monkeypatch, free_port):
+        self._simulate_browser(monkeypatch, free_port, error="access_denied")
+        monkeypatch.setattr(client, "exchange_code",
+                            lambda *a, **k: pytest.fail("must not exchange"))
+        assert client.authenticate() is False
+
+
+def test_scopes_are_explicit():
+    scopes = yoto_client.SCOPES.split()
+    assert "user:content:manage" in scopes
+    assert "offline_access" in scopes
 
 
 def test_sha256_file_matches_hashlib(client, tmp_path):
