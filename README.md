@@ -266,7 +266,7 @@ music-scraper-for-yoto-player/
 ├── requirements.txt        # Python dependencies
 ├── requirements-dev.txt    # Test/lint dependencies
 ├── tests/                  # pytest suite
-├── .github/workflows/      # CI (lint, tests, image build) and GHCR publish
+├── .github/workflows/      # CI (lint, tests, image build), GHCR publish, Dependabot auto-merge
 └── downloads/              # Downloaded MP3s
 ```
 
@@ -283,3 +283,10 @@ The tests are offline — the music provider, Yoto API and Anthropic API are all
 stubbed, so nothing hits the network and no real credentials are needed. CI
 runs the same commands on Python 3.11, 3.12 and 3.13, plus a Docker image
 build, on every push and pull request.
+
+### Dependency updates
+
+Dependabot opens weekly PRs for the Python dependencies, the Docker base image
+and the GitHub Actions used in CI. The `dependabot-automerge` workflow approves
+patch and minor bumps and enables auto-merge, so they merge once the required
+checks pass; major bumps are left for manual review.
